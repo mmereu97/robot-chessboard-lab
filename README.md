@@ -41,6 +41,14 @@ Compute times are from one run in headless Chromium and will differ on your mach
 
 ![The comparison table in the app: the same transition run by all five planners](docs/comparison.png)
 
+## Piece themes
+
+Under Movement rules: **Classic**, **Round discs**, and **True size**. True size is for experiments where the size of a piece matters: each symbol is shrunk until it fits inside a circle as wide as the base the planner checks, so pieces that do not collide also do not overlap on screen. The circle follows the Piece diameter slider and starts at 0.78 of a square.
+
+That 78% is the usual guideline (1.75-inch king's base on a 2.25-inch square), not a FIDE rule. The current [FIDE equipment rules](https://handbook.fide.com/chapter/ChessEquipmentWithoutElectronicComponenets032026) give standard heights (king 95 mm, down to pawn 50 mm), a base diameter of 40–50% of each piece's height, and squares of 5–6 cm on which four pawns must fit. That allows a king's base of anywhere from 63% to 95% of the square.
+
+A geometric consequence to keep in mind: a piece moving diagonally between two pieces on the side squares passes their centres at 0.707 of a square, so with equal bases it only fits if the base is at most 0.70. Only the Fastest reset planner uses the slider's exact geometry; the others follow strict square rules.
+
 ## Tidy trays
 
 A piece has no place of its own on a tray. Each colour fills its back column first, then the front one, with whatever comes. Duration alone is not what makes a move look right: a planner chasing only the clock will happily make pawns step aside to let a knight squeeze in behind them, which no person would do. So:

@@ -18,8 +18,27 @@ let carPos = { x: 6, y: 4 };
 let anim = null, pending = null, last = null, currentKey = 'p0';
 let algo = 'fast';
 try { const s = localStorage.getItem('robo-algo2'); if (s && ALGOS[s]) algo = s; } catch (e) {}
-try { $('optDiscs').checked = localStorage.getItem('robo-discs') === '1'; } catch (e) {}
-$('optDiscs').addEventListener('change', () => { try { localStorage.setItem('robo-discs', $('optDiscs').checked ? '1' : '0'); } catch (e) {} });
+// Piece themes. True size: each symbol fits inside a circle as wide as the base the planner
+// checks, so pieces that do not collide also do not overlap on screen.
+const KING_BASE_RULE = 0.78;   // the usual guideline: king's base = 78% of the square (not in the FIDE rules)
+const theme = () => $('pieceTheme').value;
+try { const t = localStorage.getItem('robo-theme'); if (t) $('pieceTheme').value = t; else if (localStorage.getItem('robo-discs') === '1') $('pieceTheme').value = 'discs'; } catch (e) {}
+function applyThemeDiameter() { if (theme() === 'true') { $('diam').value = KING_BASE_RULE; $('diamVal').textContent = KING_BASE_RULE.toFixed(2) + ' of a square'; } }
+$('pieceTheme').addEventListener('change', () => { try { localStorage.setItem('robo-theme', theme()); } catch (e) {} applyThemeDiameter(); });
+// the part of each image the symbol really uses, in fractions of the image (measured once, when needed)
+const SYMBOL_BOX = {};
+function symbolBox(t, img) {
+  if (SYMBOL_BOX[t]) return SYMBOL_BOX[t];
+  let box = { x0: 0.1, y0: 0.1, x1: 0.9, y1: 0.9 };
+  try {
+    const n = 180, c = document.createElement('canvas'); c.width = c.height = n;
+    const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, n, n);
+    const d = g.getImageData(0, 0, n, n).data; let x0 = n, y0 = n, x1 = -1, y1 = -1;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (d[(y * n + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 >= 0) box = { x0: x0 / n, y0: y0 / n, x1: (x1 + 1) / n, y1: (y1 + 1) / n };
+  } catch (e) {}
+  return (SYMBOL_BOX[t] = box);
+}
 
 // --- control UI ---
 const sel = $('pzSel');
@@ -268,7 +287,18 @@ function drawMagnet(p) {
 function drawPiece(ag, p, lifted) {
   const x = p.screen ? p.x : vx(p.x), y = p.y;
   const img = PIECE_IMG[ag.t];
-  if (!$('optDiscs').checked && img && img.complete && img.naturalWidth) {
+  if (theme() === 'true' && img && img.complete && img.naturalWidth) {
+    const D = diam(), b = symbolBox(ag.t, img), w = b.x1 - b.x0, h = b.y1 - b.y0;
+    const size = D / Math.hypot(w, h);     // the symbol's corners touch the circle at most
+    ctx.save();
+    ctx.strokeStyle = tok['--muted']; ctx.globalAlpha = 0.55; ctx.lineWidth = 0.015;
+    ctx.beginPath(); ctx.arc(x, y, D / 2, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+    if (lifted) { ctx.shadowColor = tok['--shadow']; ctx.shadowBlur = 0.12 * S; ctx.shadowOffsetY = 0.04 * S; }
+    ctx.drawImage(img, x - size * (b.x0 + w / 2), y - size * (b.y0 + h / 2), size, size);
+    ctx.restore();
+    return;
+  }
+  if (theme() !== 'discs' && img && img.complete && img.naturalWidth) {
     const size = 1.0 + (lifted ? 0.05 : 0);   // a square wide; slightly bigger while it moves
     ctx.save();
     ctx.shadowColor = tok['--shadow']; ctx.shadowBlur = (lifted ? 0.2 : 0.05) * S; ctx.shadowOffsetY = (lifted ? 0.07 : 0.015) * S;
@@ -478,6 +508,7 @@ function frame(now) {
   draw();
   requestAnimationFrame(frame);
 }
+applyThemeDiameter();
 resize();
 document.fonts && document.fonts.ready.then(() => draw());
 requestAnimationFrame(frame);
