@@ -18,7 +18,8 @@ let carPos = { x: 6, y: 4 };
 let anim = null, pending = null, last = null, currentKey = 'p0';
 let algo = 'fast';
 try { const s = localStorage.getItem('robo-algo2'); if (s && ALGOS[s]) algo = s; } catch (e) {}
-// Piece themes. True size: each symbol fits inside a circle as wide as the base the planner
+// Piece themes. Every piece is the same robot, with the same round base; only the drawing changes.
+// "Inside the base": each symbol fits inside an invisible circle as wide as the base the planner
 // checks, so pieces that do not collide also do not overlap on screen.
 const KING_BASE_RULE = 0.78;   // the usual guideline: king's base = 78% of the square (not in the FIDE rules)
 const theme = () => $('pieceTheme').value;
@@ -291,8 +292,6 @@ function drawPiece(ag, p, lifted) {
     const D = diam(), b = symbolBox(ag.t, img), w = b.x1 - b.x0, h = b.y1 - b.y0;
     const size = D / Math.hypot(w, h);     // the symbol's corners touch the circle at most
     ctx.save();
-    ctx.strokeStyle = tok['--muted']; ctx.globalAlpha = 0.55; ctx.lineWidth = 0.015;
-    ctx.beginPath(); ctx.arc(x, y, D / 2, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
     if (lifted) { ctx.shadowColor = tok['--shadow']; ctx.shadowBlur = 0.12 * S; ctx.shadowOffsetY = 0.04 * S; }
     ctx.drawImage(img, x - size * (b.x0 + w / 2), y - size * (b.y0 + h / 2), size, size);
     ctx.restore();
