@@ -18,6 +18,8 @@ let carPos = { x: 6, y: 4 };
 let anim = null, pending = null, last = null, currentKey = 'p0';
 let algo = 'fast';
 try { const s = localStorage.getItem('robo-algo2'); if (s && ALGOS[s]) algo = s; } catch (e) {}
+try { $('optDiscs').checked = localStorage.getItem('robo-discs') === '1'; } catch (e) {}
+$('optDiscs').addEventListener('change', () => { try { localStorage.setItem('robo-discs', $('optDiscs').checked ? '1' : '0'); } catch (e) {} });
 
 // --- control UI ---
 const sel = $('pzSel');
@@ -269,6 +271,15 @@ function drawMagnet(p) {
 }
 function drawPiece(ag, p, lifted) {
   const x = p.screen ? p.x : vx(p.x), y = p.y;
+  const img = PIECE_IMG[ag.t];
+  if (!$('optDiscs').checked && img && img.complete && img.naturalWidth) {
+    const size = 1.0 + (lifted ? 0.05 : 0);   // a square wide; slightly bigger while it moves
+    ctx.save();
+    ctx.shadowColor = tok['--shadow']; ctx.shadowBlur = (lifted ? 0.2 : 0.05) * S; ctx.shadowOffsetY = (lifted ? 0.07 : 0.015) * S;
+    ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
+    ctx.restore();
+    return;
+  }
   ctx.save();
   ctx.shadowColor = tok['--shadow']; ctx.shadowBlur = (lifted ? 0.22 : 0.08) * S; ctx.shadowOffsetY = (lifted ? 0.08 : 0.03) * S;
   ctx.fillStyle = ag.white ? tok['--pw'] : tok['--pb'];

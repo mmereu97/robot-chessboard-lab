@@ -65,6 +65,7 @@ No packages are needed, only Python 3.8+ (or nothing at all, see below).
 | `static/index.html` | Page layout |
 | `static/css/style.css` | Colors, fonts, layout (light and dark theme) |
 | `static/js/engine.js` | Motion planning: grid, assignment (Hungarian, bottleneck), sequential planner, Cooperative A\*, PIBT, the fastest-reset optimizer, collision checking |
+| `static/js/pieces.js` | The piece images (cburnett set, see License) |
 | `static/js/puzzles.js` | Puzzle database (FEN positions). Add your own here |
 | `static/js/chess.js` | Chess rules: legal moves, check, mate-in-two solver, robot defence |
 | `static/js/app.js` | Drawing, animation, buttons, playing moves |
@@ -93,4 +94,4 @@ I set the problem and the rules; the code was written with Claude Code under my 
 
 ## License
 
-MIT
+MIT. The chess pieces are the cburnett set by Colin M.L. Burnett, from [Wikimedia Commons](https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces), under its BSD license.
