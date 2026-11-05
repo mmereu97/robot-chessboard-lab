@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Robot Chessboard Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Robot <span>chessboard</span> lab</h1>
+      <p class="lede">The pieces drive themselves to the next puzzle: no teleporting, no touching. The default planner moves as many pieces at once as it can to make each reset as short as possible.</p>
+    </div>
+    <div class="clock"><span class="kbd">Space</span> random · <span class="kbd">← →</span> previous / next · <span class="kbd">R</span> reset · <span class="kbd">P</span> paths</div>
+  </header>
+
+  <div class="main">
+    <div class="stage">
+      <div class="readout">
+        <div><div class="pz-name" id="pzName">Starting position</div><div class="pz-desc" id="pzDesc">All 32 pieces on their home squares.</div></div>
+        <div class="clock" id="clock">ready</div>
+      </div>
+      <canvas id="cv" width="1270" height="860" aria-label="Chessboard with side trays for pieces not in play"></canvas>
+      <div class="bar"><i id="prog"></i></div>
+      <div class="toolbar">
+        <button class="btn" id="prevBtn" type="button"><span aria-hidden="true">◀</span> Previous puzzle <span class="kbd">←</span></button>
+        <button class="btn" id="nextBtn" type="button">Next puzzle <span aria-hidden="true">▶</span> <span class="kbd">→</span></button>
+        <span class="spacer"></span>
+        <button class="btn toggle" id="trailBtn" type="button" aria-pressed="true"><i></i> Paths <span class="kbd">P</span></button>
+      </div>
+      <div class="game" id="game" hidden>
+        <div class="game-head"><div class="game-status" id="gStatus">Your move</div><div class="clock" id="gMode"></div></div>
+        <div class="moves" id="gMoves"></div>
+        <div class="row">
+          <button class="btn" id="gRestart" type="button">Restart position</button>
+          <button class="btn" id="gHint" type="button">Hint</button>
+          <button class="btn" id="gSolution" type="button">Show solution</button>
+        </div>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="note" id="note"></div>
+    </div>
+
+    <aside>
+      <button class="go" id="goBtn" type="button">Random puzzle <small id="queueTag">→</small></button>
+      <button class="btn" id="resetBtn" type="button">Reset board to starting position</button>
+      <div>
+        <p class="lbl">Random from</p>
+        <select id="poolSel" aria-label="Random pool">
+          <option value="all">All positions</option>
+          <option value="m2">Mate in two only</option>
+          <option value="classic">Classic positions only</option>
+        </select>
+        <p class="lbl" style="margin-top:14px">Or pick one</p>
+        <select id="pzSel" aria-label="Pick a puzzle"></select>
+      </div>
+      <div>
+        <p class="lbl">Planner</p>
+        <div class="algos" id="algos"></div>
+      </div>
+      <div>
+        <p class="lbl">Movement rules</p>
+        <div class="rules">
+          <label><input type="checkbox" id="optDiag" checked> Diagonal moves</label>
+          <label><input type="checkbox" id="optTurn" checked> Penalize turns (sequential)</label>
+          <label><input type="checkbox" id="optSmooth" checked> Rounded corners (sequential)</label>
+          <label><input type="checkbox" id="optTrails" checked> Show paths and targets</label>
+          <label><input type="checkbox" id="optCar" checked> Show the magnet under the board</label>
+        </div>
+        <p class="lbl" style="margin-top:14px">Piece diameter</p>
+        <input type="range" id="diam" min="0.6" max="0.9" step="0.02" value="0.76" aria-label="Piece diameter">
+        <div class="speed"><span>slim</span><span id="diamVal">0.76 of a square</span><span>wide</span></div>
+      </div>
+      <div>
+        <p class="lbl">Speed</p>
+        <input type="range" id="speed" min="1" max="10" step="0.5" value="3" aria-label="Speed">
+        <div class="speed"><span>slow</span><span id="speedVal">3 squares/s</span><span>fast</span></div>
+      </div>
+      <div class="row">
+        <button class="btn" id="replayBtn" type="button" disabled>Replay</button>
+        <button class="btn" id="cmpBtn" type="button" disabled>Compare planners</button>
+      </div>
+    </aside>
+  </div>
+
+  <section>
+    <h2>Planner comparison on the last transition</h2>
+    <p class="sub" id="cmpSub">Runs every planner on the same change of position. Times are at the current speed. The lower bound is the longest single trip under the best possible assignment; no planner can beat it.</p>
+    <div class="tablewrap"><div class="empty" id="cmpEmpty">The comparison appears after the first transition.</div><table id="cmpTable" hidden>
+      <thead><tr><th>Planner</th><th class="num">Duration</th><th class="num">vs. lower bound</th><th class="num">Piece travel</th><th class="num">Empty magnet travel</th><th class="num">Pieces moved</th><th class="num">Detours / waits</th><th class="num">Min. clearance</th><th class="num">Compute</th><th></th></tr></thead>
+      <tbody id="cmpBody"></tbody></table></div>
+  </section>
+
+  <section>
+    <h2>How each planner thinks</h2>
+    <div class="cols">
+      <article><h3>Fastest reset</h3><p>Built to minimize the time until the last piece arrives. Pieces are matched to targets so that the longest trip is as short as possible (bottleneck assignment). Then many priority orders are tried within about a second: the piece that arrives last is moved to the front and the plan is rebuilt. Moves are checked with exact geometry, so pieces may slip past each other whenever the gap is wide enough for their real size.</p></article>
+      <article><h3>Cooperative A* (parallel)</h3><p>Every piece is a robot. Pieces are planned one by one in space-time: each reserves the squares it occupies at each moment, and later pieces route around them or wait. Uses the strict square-based rules below and a single greedy priority order.</p></article>
+      <article><h3>PIBT (parallel, reactive)</h3><p>No long-term plan: at each step every robot steps toward its target; if a higher-priority robot needs the square, it pushes the one in the way, which inherits the priority. Very fast to compute, but paths come out longer.</p></article>
+      <article><h3>Optimized sequential</h3><p>One magnet under the board, so one piece at a time. Optimal matching (Hungarian algorithm), an order that keeps empty magnet travel short, A* with diagonals and a turn cost, rounded corners and a trapezoidal speed profile.</p></article>
+      <article><h3>Naive, one piece at a time</h3><p>One magnet, pieces taken in board order, each to the first free target of its type, orthogonal moves only, stopping on every square. Roughly the clumsy choreography you noticed on the real board.</p></article>
+    </div>
+    <div class="rulebox">
+      <b>Collision rules.</b> The strict rules used by Cooperative A*, PIBT and the sequential planners work on whole squares: you may enter an occupied square only if its occupant leaves in exactly the same direction, like train cars, and a diagonal step needs both side squares empty before and after. The fastest-reset planner instead computes the closest approach of every pair of moving pieces during each step and only requires it to stay above the piece diameter you set. Every plan is checked continuously afterwards; the result is shown as minimum clearance.
+    </div>
+  </section>
+</div>
+
+<script src="js/engine.js"></script>
+<script src="js/puzzles.js"></script>
+<script src="js/chess.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
