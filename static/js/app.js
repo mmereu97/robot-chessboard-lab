@@ -176,7 +176,6 @@ function resize() {
   ctx.setTransform(dpr * S, 0, 0, dpr * S, PAD * dpr * S, PAD * dpr * S);
 }
 window.addEventListener('resize', resize);
-const trayType = c => { const x = c % W, y = (c / W) | 0; if (x === 1) return 'P'; if (x === 0) return TRAY_ORDER[y]; if (x === 10) return 'p'; if (x === 11) return TRAY_ORDER[y].toLowerCase(); return null; };
 function rrect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 const hue = a => (a * 137.508) % 360;
 
@@ -188,10 +187,7 @@ function draw() {
   for (const x0 of [0, 10]) {
     ctx.fillStyle = tok['--tray']; rrect(vx(x0) - 0.12, -0.12, 2.24, 8.24, 0.22); ctx.fill();
     for (let x = x0; x < x0 + 2; x++) for (let y = 0; y < 8; y++) {
-      const t = trayType(y * W + x);
       ctx.fillStyle = tok['--tray-slot']; ctx.beginPath(); ctx.arc(vx(x + 0.5), y + 0.5, 0.34, 0, 7); ctx.fill();
-      ctx.fillStyle = tok['--muted']; ctx.globalAlpha = 0.35; ctx.font = '0.36px "Segoe UI Symbol","DejaVu Sans","Noto Sans Symbols 2",serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(GLYPH[t.toLowerCase()] + '︎', vx(x + 0.5), y + 0.53); ctx.globalAlpha = 1;
     }
   }
   // tabla
@@ -327,12 +323,13 @@ function boardAgents() { const map = new Map(); cells.forEach((c, a) => map.set(
 const isTrayCell = c => cx(c) < 2 || cx(c) >= 10;
 const ALL_TRAY = Array.from({ length: N }, (_, c) => c).filter(isTrayCell);
 function freeTraySlot(type, nearCell) {
-  const occ = new Set(cells);
-  let slots = TRAY[type].filter(c => !occ.has(c));
-  // a piece dropped by hand can sit on any tray cell, so the home slots may all be taken
-  if (!slots.length) slots = ALL_TRAY.filter(c => !occ.has(c));
-  slots.sort((x, y) => Math.hypot(cx(x) - cx(nearCell), cy(x) - cy(nearCell)) - Math.hypot(cx(y) - cx(nearCell), cy(y) - cy(nearCell)));
-  return slots[0];
+  const occ = new Set(cells), own = TRAY_CELLS[type === type.toUpperCase() ? 'white' : 'black'];
+  const dist = c => Math.hypot(cx(c) - cx(nearCell), cy(c) - cy(nearCell));
+  // the back column of its own tray, then the front; a tray filled by hand can leave only the other one
+  for (const pool of [own.slice(0, 8), own.slice(8), ALL_TRAY]) {
+    const free = pool.filter(c => !occ.has(c));
+    if (free.length) return free.reduce((b, c) => dist(c) < dist(b) ? c : b);
+  }
 }
 const inTray = (a, type) => agents[a].t === type && isTrayCell(cells[a]) && !(game && game.held && game.held.a === a);
 function trayHas(type) { return agents.some((ag, a) => inTray(a, type)); }

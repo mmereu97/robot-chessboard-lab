@@ -70,18 +70,12 @@ function hungarian(a) {
 }
 
 // ---------- configurații ----------
-// Tăvi: coloana 0/1 pentru albe (0 = piese, 1 = pioni), 10/11 pentru negre (10 = pioni, 11 = piese)
-const TRAY_ORDER = ['R','N','B','Q','K','B','N','R'];
-function traySlots() {
-  const slots = {};
-  const add = (t, c) => (slots[t] = slots[t] || []).push(c);
-  for (let r = 0; r < 8; r++) {
-    add(TRAY_ORDER[r], idx(0, r)); add('P', idx(1, r));
-    add(TRAY_ORDER[r].toLowerCase(), idx(11, r)); add('p', idx(10, r));
-  }
-  return slots;
-}
-const TRAY = traySlots();
+// Trays: white on the left, black on the right. No piece has a place of its own: each tray fills
+// its back column (away from the board) first, then its front column, with whatever comes.
+const TRAY_CELLS = {
+  white: [...Array(8).keys()].map(r => idx(0, r)).concat([...Array(8).keys()].map(r => idx(1, r))),
+  black: [...Array(8).keys()].map(r => idx(11, r)).concat([...Array(8).keys()].map(r => idx(10, r))),
+};
 const FULL_SET = 'KQRRBBNNPPPPPPPPkqrrbbnnpppppppp'.split('');
 
 function parseFEN(fen) {
@@ -97,17 +91,43 @@ function parseFEN(fen) {
   return map;
 }
 
+// which tray cell gets which leftover piece: the back column first; among those, the choice that
+// moves the pieces least, so a piece already sitting in the back column stays where it is
+function fillTray(cfg, types, cells, agents, starts) {
+  if (!starts) { types.forEach((t, i) => cfg.set(cells[i], t)); return; }
+  const FRONT = 1000;                       // far above any distance: the front column is the last resort
+  const BEHIND = 4;                         // squeezing in behind a piece costs more than that piece stepping back
+  const at = new Map(); starts.forEach((c, a) => at.set(c, a));
+  const cost = t => cells.map((c, i) => {
+    let d = Infinity;
+    agents.forEach((ag, a) => {
+      if (ag.t !== t) return;
+      const blocker = i < 8 ? at.get(cells[i + 8]) : undefined;     // who stands in front of this back place
+      const behind = blocker !== undefined && blocker !== a && starts[a] !== c;
+      d = Math.min(d, octile(starts[a], c) + (behind ? BEHIND : 0));
+    });
+    return d + (d > 0 ? 0.35 : 0) + (i >= 8 ? FRONT : 0);
+  });
+  const m = types.map(cost);
+  while (m.length < cells.length) m.push(new Array(cells.length).fill(0));   // empty places
+  const res = hungarian(m);
+  types.forEach((t, i) => cfg.set(cells[res[i]], t));
+}
+
 // ținta completă: celulă -> tip pentru toate cele 32 de piese
-function targetConfig(fen) {
+function targetConfig(fen, agents, starts) {
   const board = parseFEN(fen);
   const need = {};
   FULL_SET.forEach(t => need[t] = (need[t] || 0) + 1);
   const cfg = new Map();
   for (const [c, t] of board) { cfg.set(c, t); need[t]--; }
+  const left = { white: [], black: [] };
   for (const t in need) {
     if (need[t] < 0) throw new Error('Prea multe piese de tip ' + t);
-    for (let i = 0; i < need[t]; i++) cfg.set(TRAY[t][i], t);
+    for (let i = 0; i < need[t]; i++) left[t === t.toUpperCase() ? 'white' : 'black'].push(t);
   }
+  fillTray(cfg, left.white, TRAY_CELLS.white, agents, starts);
+  fillTray(cfg, left.black, TRAY_CELLS.black, agents, starts);
   return cfg;
 }
 
@@ -652,7 +672,17 @@ function planCA(starts, goals, opt, budget = 0) {
   // ---- makespan optimizer: try many priority orders, keep the shortest plan ----
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const tStart = now();
-  const score = r => { let mk = 0, sum = 0; r.paths.forEach(p => { mk = Math.max(mk, p.length - 1); sum += p.length - 1; }); return { mk, v: mk * 1000 + sum }; };
+  // A piece with nowhere to go should not step aside for the others: each one that does counts
+  // as ASIDE_COST extra steps of duration, so a plan pays for it only if it saves real time.
+  const ASIDE_COST = 3;
+  const score = r => {
+    let mk = 0, sum = 0, aside = 0;
+    r.paths.forEach((p, a) => {
+      mk = Math.max(mk, p.length - 1); sum += p.length - 1;
+      if (starts[a] === goals[a] && p.some(c => c !== starts[a])) aside++;
+    });
+    return { mk, v: (mk + ASIDE_COST * aside) * 1000 + sum };
+  };
   let best = null, bestV = Infinity, iters = 0;
   const improvements = [];
   const consider = (r) => {
@@ -673,6 +703,9 @@ function planCA(starts, goals, opt, budget = 0) {
     return null;
   };
   const longest = [...Array(n).keys()].sort((a, b) => D[goals[b] * N + starts[b]] - D[goals[a] * N + starts[a]]);
+  // pieces that stay put reserve their squares first; the others route around them
+  const staysFirst = [...longest].sort((a, b) => (starts[b] === goals[b]) - (starts[a] === goals[a]));
+  for (const k of [0, 2, 1, 3]) if (!best || now() - tStart < budget * 0.6) consider(classic(staysFirst, 12, k));
   for (const k of [0, 2, 1, 3]) if (!best || now() - tStart < budget * 0.6) consider(classic(longest, 12, k));
   if (!best || now() - tStart < budget * 0.7) consider(run(base, 'greedy'));
   if (!best) consider(run(longest, 'greedy'));
@@ -804,7 +837,7 @@ const ALGOS = {
 };
 
 function planTransition(algoKey, agents, starts, fen, opt, carStart) {
-  const cfg = targetConfig(fen), A = ALGOS[algoKey];
+  const cfg = targetConfig(fen, agents, starts), A = ALGOS[algoKey];
   const diag = algoKey === 'naive' ? false : (algoKey === 'pibt' ? false : opt.diag);
   const lb = bottleneckValue(agents, starts, cfg, opt.diag);
   const goals = assign(agents, starts, cfg, A.assign, diag);

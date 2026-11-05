@@ -14,7 +14,7 @@ The idea came from watching a commercial robotic board, the Chessnut Move, set u
 
 | Planner | Idea |
 |---|---|
-| **Fastest reset** (default) | Bottleneck assignment, so the longest single trip is as short as possible; then many priority orders within about a second, moving the piece that arrives last to the front; moves checked with exact geometry |
+| **Fastest reset** (default) | Bottleneck assignment, so the longest single trip is as short as possible; then many priority orders within about a second, moving the piece that arrives last to the front; moves checked with exact geometry; pieces with nowhere to go are left alone |
 | **Cooperative A\*** | Space-time planning with reservations, one greedy priority order, strict square rules |
 | **PIBT** | No long-term plan: at each step every piece moves towards its target, pushing and passing on priority when needed |
 | **Optimized sequential** | One magnet under the board: Hungarian assignment, an order that keeps empty magnet travel short, A\* with diagonals and rounded corners |
@@ -26,26 +26,35 @@ All five planners on the same chain of 25 changes of position (every position in
 
 | Planner | Mean duration | Mean piece travel | Mean compute | Smallest distance between pieces |
 |---|---:|---:|---:|---:|
-| *Lower bound* | *2.3 s* | | | |
-| Fastest reset | **2.7 s** | 90 squares | 485 ms | 0.89 |
-| Cooperative A\* | 5.1 s | 106 squares | 86 ms | 1.00 |
-| PIBT | 6.1 s | 170 squares | 1 ms | 1.00 |
-| Optimized sequential | 39.6 s | 94 squares | 5 ms | 1.00 |
-| Naive | 55.9 s | 131 squares | 1 ms | 1.00 |
+| *Lower bound* | *2.2 s* | | | |
+| Fastest reset | **2.8 s** | 78 squares | 434 ms | 0.89 |
+| Cooperative A\* | 5.0 s | 104 squares | 74 ms | 1.00 |
+| PIBT | 5.8 s | 152 squares | 1 ms | 1.00 |
+| Optimized sequential | 37.3 s | 89 squares | 5 ms | 1.00 |
+| Naive | 59.0 s | 138 squares | 1 ms | 1.00 |
 
-- The default planner finishes about 13% above the lower bound, roughly 21 times faster than moving one piece at a time.
-- Every plan completed, and no two pieces came closer than their diameter. The fallbacks are visible in the app: Cooperative A\* fell back to PIBT on at least one transition, and the two sequential planners finished with serialized PIBT when their heuristic looped.
+- The default planner finishes about 30% above the lower bound, roughly 21 times faster than moving one piece at a time.
+- Every plan completed, and no two pieces came closer than their diameter. The fallbacks are visible in the app: the two sequential planners can finish with serialized PIBT when their heuristic loops.
 - The 12 mate-in-two puzzles were checked with the app's own solver: each has exactly one key move.
 
 Compute times are from one run in headless Chromium and will differ on your machine. The Fastest reset planner has a time budget and randomised orders, so its numbers vary slightly between runs.
 
 ![The comparison table in the app: the same transition run by all five planners](docs/comparison.png)
 
+## Tidy trays
+
+A piece has no place of its own on a tray. Each colour fills its back column first, then the front one, with whatever comes. Duration alone is not what makes a move look right: a planner chasing only the clock will happily make pawns step aside to let a knight squeeze in behind them, which no person would do. So:
+
+- a piece does not squeeze in behind another: the piece in front steps back and the newcomer takes its place;
+- in the Fastest reset planner, pieces that stay put reserve their squares first, and each piece that has to step aside counts as extra duration.
+
+Over the same 25 transitions (mean of three runs), pieces stepping aside with nowhere to go fell from about 44 to 1, at the price of 0.2 s per transition.
+
 ## Captures by hand
 
 A person does not leave a captured piece to tidy itself away, so by default the app doesn't either. When you take a piece, it stays on your cursor while your own piece drives to the square. Nothing else can move until you drop it on a free place on either tray, wherever you like; in the mate-in-two puzzles the robot replies only after that. Its own captures still go to the tray by themselves. The option is under Movement rules.
 
-Pieces are not tied to parking places: every plan starts from where the pieces really are. The next puzzle takes that knight from wherever you left it, even a slot marked for another piece. Positions stay on the tray's grid, because the planners work on cells. A test with pieces shuffled across the trays passed on all five planners (12 of 12 transitions each, with no collisions).
+Pieces are not tied to parking places: every plan starts from where the pieces really are. The next puzzle takes that knight from wherever you left it. Positions stay on the tray's grid, because the planners work on cells. A test with pieces shuffled across the trays passed on all five planners (12 of 12 transitions each, with no collisions).
 
 ![A captured knight on the cursor, with a dashed ring on the free tray place where it would land](docs/capture-by-hand.png)
 
