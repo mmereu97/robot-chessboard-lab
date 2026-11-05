@@ -32,20 +32,13 @@ $('pieceTheme').addEventListener('change', () => {
   if (!insideBase(lastTheme)) applyThemeDiameter();   // between the two "inside" themes the slider stays where it is
   lastTheme = theme();
 });
-// the part of each image the symbol really uses, in fractions of the image (measured once, when needed)
-const SYMBOL_BOX = {};
-function symbolBox(t, img) {
-  if (SYMBOL_BOX[t]) return SYMBOL_BOX[t];
-  let box = { x0: 0.1, y0: 0.1, x1: 0.9, y1: 0.9 };
-  try {
-    const n = 180, c = document.createElement('canvas'); c.width = c.height = n;
-    const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, n, n);
-    const d = g.getImageData(0, 0, n, n).data; let x0 = n, y0 = n, x1 = -1, y1 = -1;
-    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (d[(y * n + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-    if (x1 >= 0) box = { x0: x0 / n, y0: y0 / n, x1: (x1 + 1) / n, y1: (y1 + 1) / n };
-  } catch (e) {}
-  return (SYMBOL_BOX[t] = box);
-}
+// inside the base: size of each image as a multiple of the circle's diameter, and the centre of the smallest
+// circle around the symbol, in fractions of the image. King and queen fill the circle; the others follow the
+// height order of a real set (king, queen, bishop, knight, rook, pawn).
+const INSIDE = {
+  K: { s: 1.21, cx: 0.489, cy: 0.516 }, Q: { s: 1.01, cx: 0.499, cy: 0.469 }, B: { s: 0.97, cx: 0.499, cy: 0.575 },
+  N: { s: 0.91, cx: 0.568, cy: 0.518 }, R: { s: 0.91, cx: 0.499, cy: 0.551 }, P: { s: 0.84, cx: 0.497, cy: 0.589 },
+};
 
 // --- control UI ---
 const sel = $('pzSel');
@@ -295,12 +288,11 @@ function drawPiece(ag, p, lifted) {
   const x = p.screen ? p.x : vx(p.x), y = p.y;
   const img = PIECE_IMG[ag.t];
   if (insideBase(theme()) && img && img.complete && img.naturalWidth) {
-    const D = diam(), b = symbolBox(ag.t, img), w = b.x1 - b.x0, h = b.y1 - b.y0;
-    const size = D / Math.hypot(w, h);     // the symbol's corners touch the circle at most
+    const D = diam(), f = INSIDE[ag.t.toUpperCase()], size = D * f.s;
     ctx.save();
     if (theme() === 'ring') { ctx.strokeStyle = tok['--muted']; ctx.globalAlpha = 0.55; ctx.lineWidth = 0.015; ctx.beginPath(); ctx.arc(x, y, D / 2, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
     if (lifted) { ctx.shadowColor = tok['--shadow']; ctx.shadowBlur = 0.12 * S; ctx.shadowOffsetY = 0.04 * S; }
-    ctx.drawImage(img, x - size * (b.x0 + w / 2), y - size * (b.y0 + h / 2), size, size);
+    ctx.drawImage(img, x - size * f.cx, y - size * f.cy, size, size);
     ctx.restore();
     return;
   }
