@@ -41,6 +41,14 @@ Compute times are from one run in headless Chromium and will differ on your mach
 
 ![The comparison table in the app: the same transition run by all five planners](docs/comparison.png)
 
+## Captures by hand
+
+A person does not leave a captured piece to tidy itself away, so by default the app doesn't either. When you take a piece, it stays on your cursor while your own piece drives to the square. Nothing else can move until you drop it on a free place on either tray, wherever you like; in the mate-in-two puzzles the robot replies only after that. Its own captures still go to the tray by themselves. The option is under Movement rules.
+
+Pieces are not tied to parking places: every plan starts from where the pieces really are. The next puzzle takes that knight from wherever you left it, even a slot marked for another piece. Positions stay on the tray's grid, because the planners work on cells. A test with pieces shuffled across the trays passed on all five planners (12 of 12 transitions each, with no collisions).
+
+![A captured knight on the cursor, with a dashed ring on the free tray place where it would land](docs/capture-by-hand.png)
+
 ## Run
 
 No packages are needed, only Python 3.8+ (or nothing at all, see below).

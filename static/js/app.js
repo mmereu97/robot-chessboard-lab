@@ -59,6 +59,7 @@ function request(key) {
   launch(key, pz);
 }
 function launch(key, pz, fromStarts) {
+  releaseHeld();
   currentKey = key; sel.value = key;
   $('pzName').textContent = pz.name; $('pzDesc').textContent = pz.desc;
   $('clock').textContent = algo === 'fast' ? 'optimizing paths…' : 'planning paths…'; $('note').textContent = '';
@@ -247,9 +248,17 @@ function draw() {
 
   // piese: întâi cele în repaus, apoi cele care se mișcă
   const order = [...agents.keys()].sort((x, y) => moving[x] - moving[y]);
+  const held = game && game.held;
+  if (held && held.queued !== null) P[held.a] = cellXY(held.queued);
   drawGameMarks();
-  for (const a of order) drawPiece(agents[a], P[a], moving[a]);
+  for (const a of order) if (!held || held.queued !== null || a !== held.a) drawPiece(agents[a], P[a], moving[a]);
   drawGameDots();
+  if (held && held.queued === null) {
+    // where it would land, then the piece itself on the cursor
+    const side = traySide(mouse.x), c = side < 0 ? null : dropCell(mouse.x, mouse.y, side);
+    if (c !== null) { ctx.strokeStyle = tok['--accent']; ctx.lineWidth = 0.05; ctx.setLineDash([0.1, 0.07]); ctx.beginPath(); ctx.arc(vx(cx(c) + 0.5), cy(c) + 0.5, R, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
+    drawPiece(agents[held.a], { x: mouse.x, y: mouse.y, screen: true }, 1);
+  }
 }
 function drawMagnet(p) {
   const x = vx(p.x), y = p.y;
@@ -259,7 +268,7 @@ function drawMagnet(p) {
   ctx.globalAlpha = 1;
 }
 function drawPiece(ag, p, lifted) {
-  const x = vx(p.x), y = p.y;
+  const x = p.screen ? p.x : vx(p.x), y = p.y;
   ctx.save();
   ctx.shadowColor = tok['--shadow']; ctx.shadowBlur = (lifted ? 0.22 : 0.08) * S; ctx.shadowOffsetY = (lifted ? 0.08 : 0.03) * S;
   ctx.fillStyle = ag.white ? tok['--pw'] : tok['--pb'];
@@ -277,7 +286,7 @@ function drawPiece(ag, p, lifted) {
 let game = null;
 const sqToCell = sq => (sq >> 3) * W + 2 + (sq & 7);
 const sqX = sq => vx(2 + (sq & 7) + 0.5), sqY = sq => (sq >> 3) + 0.5;
-function endGame() { game = null; $('game').hidden = true; cv.classList.remove('clickable'); }
+function endGame() { game = null; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
 function startGame(pz) {
   const m2 = pz.set === 'm2';
   game = { pz, st: CH.fromFEN(pz.fen, true), m2, history: [], sel: -1, last: null, phase: 'user', userMoves: 0, hint: -1, result: '' };
@@ -295,27 +304,44 @@ function refreshGame() {
   else if (g.result === 'lose') { text = g.loseMsg || 'Not mate in two.'; cls = 'lose'; }
   else if (st === 'mate') { text = 'Checkmate. ' + (g.st.white ? 'Black' : 'White') + ' wins.'; cls = 'win'; }
   else if (st === 'stalemate') { text = 'Stalemate.'; }
+  else if (g.held && g.held.queued === null) text = `Take the ${PIECE_NAME[agents[g.held.a].t.toLowerCase()]} off the board: click a free place on a tray.`;
   else if (g.phase === 'robot') text = 'Black is thinking…';
   else if (g.phase === 'moving') text = 'Moving…';
   else text = (g.m2 ? 'Your move' : side + ' to move') + (st === 'check' ? ' · check' : '');
   $('gStatus').textContent = text; $('gStatus').className = 'game-status ' + cls;
+  cv.classList.toggle('holding', !!(g.held && g.held.queued === null));
   $('gMoves').innerHTML = g.history.map((h, i) => (i % 2 === 0 ? `<b>${(i >> 1) + 1}.</b> ` : '') + h).join(' ') || '&nbsp;';
 }
 function boardAgents() { const map = new Map(); cells.forEach((c, a) => map.set(c, a)); return map; }
+const isTrayCell = c => cx(c) < 2 || cx(c) >= 10;
+const ALL_TRAY = Array.from({ length: N }, (_, c) => c).filter(isTrayCell);
 function freeTraySlot(type, nearCell) {
-  const occ = new Set(cells), slots = TRAY[type].filter(c => !occ.has(c));
+  const occ = new Set(cells);
+  let slots = TRAY[type].filter(c => !occ.has(c));
+  // a piece dropped by hand can sit on any tray cell, so the home slots may all be taken
+  if (!slots.length) slots = ALL_TRAY.filter(c => !occ.has(c));
   slots.sort((x, y) => Math.hypot(cx(x) - cx(nearCell), cy(x) - cy(nearCell)) - Math.hypot(cx(y) - cx(nearCell), cy(y) - cy(nearCell)));
   return slots[0];
 }
-function trayHas(type) { const occ = new Map(); cells.forEach((c, a) => occ.set(c, a)); return TRAY[type].some(c => occ.has(c) && agents[occ.get(c)].t === type); }
+const inTray = (a, type) => agents[a].t === type && isTrayCell(cells[a]) && !(game && game.held && game.held.a === a);
+function trayHas(type) { return agents.some((ag, a) => inTray(a, type)); }
 // physical move: which robot goes where (capture to tray, rook in castling, promotion swap with a tray piece)
-function playMove(m) {
+function playMove(m, byUser = false) {
   const g = game, map = boardAgents(), goals = cells.slice();
   const mover = map.get(sqToCell(m.from));
-  if (m.capSq >= 0) { const victim = map.get(sqToCell(m.capSq)); goals[victim] = freeTraySlot(agents[victim].t, sqToCell(m.capSq)); }
+  if (m.capSq >= 0) {
+    const victim = map.get(sqToCell(m.capSq)), slot = freeTraySlot(agents[victim].t, sqToCell(m.capSq));
+    goals[victim] = slot;
+    if (byUser && $('optHand').checked) {
+      // Lifted at once, so the capturing piece finds its square empty. For the planner it already
+      // waits on a free tray cell; it is drawn on the cursor until it is dropped.
+      cells = cells.slice(); cells[victim] = slot;
+      g.held = { a: victim, queued: null };
+    }
+  }
   if (m.promo) {
     goals[mover] = freeTraySlot(m.piece, sqToCell(m.from));
-    const spare = cells.findIndex((c, a) => agents[a].t === m.promo && TRAY[m.promo].includes(c));
+    const spare = agents.findIndex((ag, a) => inTray(a, m.promo));
     goals[spare] = sqToCell(m.to);
   } else goals[mover] = sqToCell(m.to);
   if (m.castle) goals[map.get(sqToCell(m.rookFrom))] = sqToCell(m.rookTo);
@@ -331,6 +357,10 @@ function playMove(m) {
 }
 function afterMove() {
   const g = game; if (!g) return;
+  if (g.held) { // play goes on only once the captured piece is off the board
+    if (g.held.queued === null) { g.phase = 'hold'; refreshGame(); return; }
+    cells[g.held.a] = g.held.queued; g.held = null;
+  }
   const st = CH.status(g.st);
   if (!g.m2) { g.phase = 'user'; refreshGame(); return; }
   if (!g.st.white) { // the user just moved
@@ -350,17 +380,50 @@ function pickPromo(list) { // auto-promote to the best piece available in the tr
   for (const t of 'QRBN') { const m = list.find(x => x.promo && x.promo.toUpperCase() === t); if (m) return m; }
   return list[0];
 }
+// =================== a captured piece in the hand ===================
+const PIECE_NAME = { k: 'king', q: 'queen', r: 'rook', b: 'bishop', n: 'knight', p: 'pawn' };
+const mouse = { x: 0, y: 0 };
+function trackMouse(e) { const rect = cv.getBoundingClientRect(); mouse.x = (e.clientX - rect.left) / S - PAD; mouse.y = (e.clientY - rect.top) / S - PAD; }
+window.addEventListener('pointermove', trackMouse);
+// the free tray cell nearest to a point; side: 0 = left tray, 1 = right tray, -1 = both
+function dropCell(x, y, side) {
+  const g = game, a = g.held.a, occ = new Set(anim ? anim.plan.goals : cells);
+  occ.delete(anim ? anim.plan.goals[a] : cells[a]); // its own parking cell is free for it
+  const dist = c => Math.hypot(vx(cx(c) + 0.5) - x, cy(c) + 0.5 - y);
+  const free = ALL_TRAY.filter(c => !occ.has(c) && (side < 0 || (side === 0) === (cx(c) < 2)));
+  return free.length ? free.reduce((b, c) => dist(c) < dist(b) ? c : b) : null;
+}
+const traySide = x => x < vx(2.5) - 0.5 ? 0 : x > vx(2.5) + 7.5 ? 1 : -1;
+function dropHeld() {
+  const g = game, side = traySide(mouse.x);
+  if (side < 0) { flashHold('Drop it on a tray, left or right of the board.'); return; }
+  const c = dropCell(mouse.x, mouse.y, side);
+  if (c === null) { flashHold('That tray is full. Use the other one.'); return; }
+  if (anim) { g.held.queued = c; refreshGame(); return; } // settled when the capturing piece arrives
+  cells[g.held.a] = c; g.held = null;
+  if (g.phase === 'hold') afterMove();
+  refreshGame();
+}
+function flashHold(text) { $('gStatus').textContent = text; }
+// leaving the position while still holding a piece: it goes to the nearest free tray cell
+function releaseHeld() {
+  const g = game; if (!g || !g.held) return;
+  const c = g.held.queued !== null ? g.held.queued : dropCell(mouse.x, mouse.y, -1);
+  if (c !== null) cells[g.held.a] = c;
+  g.held = null; cv.classList.remove('holding');
+}
 cv.addEventListener('click', e => {
   const g = game;
+  trackMouse(e);
+  if (g && g.held && g.held.queued === null) { dropHeld(); return; }
   if (!g || anim || g.phase !== 'user' || CH.status(g.st) === 'mate' || CH.status(g.st) === 'stalemate') return;
-  const rect = cv.getBoundingClientRect();
-  const ux = (e.clientX - rect.left) / S - PAD, uy = (e.clientY - rect.top) / S - PAD;
+  const ux = mouse.x, uy = mouse.y;
   const f = Math.floor(ux - 2 - GAP), r = Math.floor(uy);
   if (f < 0 || f > 7 || r < 0 || r > 7) { g.sel = -1; return; }
   const sq = r * 8 + f, p = g.st.b[sq];
   if (g.sel >= 0) {
     const ms = legalFrom(g.sel).filter(m => m.to === sq);
-    if (ms.length) { playMove(ms.length > 1 ? pickPromo(ms) : ms[0]); return; }
+    if (ms.length) { playMove(ms.length > 1 ? pickPromo(ms) : ms[0], true); return; }
   }
   g.sel = (p && (p === p.toUpperCase()) === g.st.white && legalFrom(sq).length) ? sq : -1;
 });

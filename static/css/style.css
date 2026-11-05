@@ -108,3 +108,4 @@ td.best { color: var(--good); font-weight: 500; }
 .game .btn { flex: 0 1 auto; }
 canvas.clickable { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .go { transition: none; } }
+canvas.holding { cursor: grabbing; }
