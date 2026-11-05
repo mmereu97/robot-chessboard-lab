@@ -66,6 +66,12 @@ Pieces are not tied to parking places: every plan starts from where the pieces r
 
 ![A captured knight on the cursor, with a dashed ring on the free tray place where it would land](docs/capture-by-hand.png)
 
+## Play Stockfish
+
+Set an Elo from 500 to 3000, pick a color and press Play Stockfish: the robots carry out both sides' moves on the board. The bot is the one from [chess-analysis-board](https://github.com/mmereu97/chess-analysis-board), copied with its calibration unchanged. Below Elo 1320 it plays and errs like a person: sound opening moves, moves played for an idea, instinctive checks, a rare blunder. From 1320 up it is Stockfish's own strength limit. Playing Black turns the board around. The engine loads only when you start a game.
+
+A pawn always promotes, to a spare queen from the tray if there is one. With no spare on the trays, its robot takes on the new piece.
+
 ## Run
 
 No packages are needed, only Python 3.8+ (or nothing at all, see below).
@@ -86,6 +92,7 @@ No packages are needed, only Python 3.8+ (or nothing at all, see below).
 | `static/js/puzzles.js` | Puzzle database (FEN positions). Add your own here |
 | `static/js/chess.js` | Chess rules: legal moves, check, mate-in-two solver, robot defence |
 | `static/js/app.js` | Drawing, animation, buttons, playing moves |
+| `static/bot/` | The Stockfish bot: its brain and driver (`bot.js`), the engine, chess.js, the openings database |
 | `serve.py` | Local web server for PyCharm |
 | `index.html` | Entry page for GitHub Pages; redirects to `static/` |
 
@@ -111,4 +118,4 @@ I set the problem and the rules; the code was written with Claude Code under my 
 
 ## License
 
-MIT. The chess pieces are the cburnett set by Colin M.L. Burnett, from [Wikimedia Commons](https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces), under its BSD license.
+MIT, except `static/bot/`: the bot and Stockfish 18 are GPL-3.0 and chess.js is BSD-2-Clause, each with its license file there. The chess pieces are the cburnett set by Colin M.L. Burnett, from [Wikimedia Commons](https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces), under its BSD license.

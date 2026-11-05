@@ -64,6 +64,7 @@ const speed = () => +$('speed').value;
 $('speed').addEventListener('input', () => { $('speedVal').textContent = speed() + ' squares/s'; if (lastCmp) renderCmp(lastCmp); renderStats(); });
 
 function puzzleFor(key) {
+  if (key === 'bot') return botPuzzle();
   if (key === 'rand') return { name: 'Random position', desc: 'Pieces scattered at random, as a stress test.', fen: randomFEN() };
   return PUZZLES[+key.slice(1)];
 }
@@ -81,6 +82,8 @@ function request(key) {
 }
 function launch(key, pz, fromStarts) {
   releaseHeld();
+  agents.forEach((ag, a) => { ag.t = FULL_SET[a]; }); // a pawn promoted without a spare goes back to being a pawn
+  flip = !!(pz.bot && pz.bot.human === 'b');
   currentKey = key; sel.value = key;
   $('pzName').textContent = pz.name; $('pzDesc').textContent = pz.desc;
   $('clock').textContent = algo === 'fast' ? 'optimizing paths…' : 'planning paths…'; $('note').textContent = '';
@@ -218,10 +221,12 @@ function draw() {
   ctx.font = '500 0.17px "IBM Plex Mono", monospace'; ctx.textBaseline = 'alphabetic';
   for (let i = 0; i < 8; i++) {
     ctx.fillStyle = i % 2 ? tok['--sq-light'] : tok['--sq-dark'];
-    ctx.textAlign = 'right'; ctx.fillText('abcdefgh'[i], bx + i + 0.94, 7.94);
+    ctx.textAlign = 'right'; ctx.fillText((flip ? 'hgfedcba' : 'abcdefgh')[i], bx + i + 0.94, 7.94);
     ctx.fillStyle = i % 2 ? tok['--sq-dark'] : tok['--sq-light'];
-    ctx.textAlign = 'left'; ctx.fillText(String(8 - i), bx + 0.05, i + 0.2);
+    ctx.textAlign = 'left'; ctx.fillText(String(flip ? i + 1 : 8 - i), bx + 0.05, i + 0.2);
   }
+  // playing Black: everything from here on is turned around the board's centre, and each piece back upright
+  if (flip) { ctx.save(); ctx.translate(wU, 8); ctx.scale(-1, -1); }
 
   const P = [], moving = new Uint8Array(agents.length);
   const t = anim ? anim.t : 0;
@@ -276,6 +281,7 @@ function draw() {
     if (c !== null) { ctx.strokeStyle = tok['--accent']; ctx.lineWidth = 0.05; ctx.setLineDash([0.1, 0.07]); ctx.beginPath(); ctx.arc(vx(cx(c) + 0.5), cy(c) + 0.5, R, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
     drawPiece(agents[held.a], { x: mouse.x, y: mouse.y, screen: true }, 1);
   }
+  if (flip) ctx.restore();
 }
 function drawMagnet(p) {
   const x = vx(p.x), y = p.y;
@@ -285,6 +291,11 @@ function drawMagnet(p) {
   ctx.globalAlpha = 1;
 }
 function drawPiece(ag, p, lifted) {
+  if (!flip) { drawPieceUp(ag, p, lifted); return; }
+  const x = p.screen ? p.x : vx(p.x), y = p.y;
+  ctx.save(); ctx.translate(2 * x, 2 * y); ctx.scale(-1, -1); drawPieceUp(ag, p, lifted); ctx.restore();
+}
+function drawPieceUp(ag, p, lifted) {
   const x = p.screen ? p.x : vx(p.x), y = p.y;
   const img = PIECE_IMG[ag.t];
   if (insideBase(theme()) && img && img.complete && img.naturalWidth) {
@@ -318,10 +329,10 @@ function drawPiece(ag, p, lifted) {
 }
 
 // =================== playing the position ===================
-let game = null;
+let game = null, flip = false;
 const sqToCell = sq => (sq >> 3) * W + 2 + (sq & 7);
 const sqX = sq => vx(2 + (sq & 7) + 0.5), sqY = sq => (sq >> 3) + 0.5;
-function endGame() { game = null; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
+function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); game = null; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
 function startGame(pz) {
   const m2 = pz.set === 'm2';
   game = { pz, st: CH.fromFEN(pz.fen, true), m2, history: [], sel: -1, last: null, phase: 'user', userMoves: 0, hint: -1, result: '' };
@@ -329,20 +340,64 @@ function startGame(pz) {
   $('game').hidden = false; cv.classList.add('clickable');
   $('gMode').textContent = m2 ? 'White to move · mate in two · the robot defends' : 'Free play · you move both sides';
   $('gHint').hidden = $('gSolution').hidden = !m2;
+  $('gRestart').textContent = pz.bot ? 'New game' : 'Restart position';
+  if (pz.bot) startBotGame(pz.bot);
   refreshGame();
 }
+// =================== playing Stockfish ===================
+// The bot and its 7 MB engine live in static/bot/ and load only when someone wants to play.
+function botPuzzle() {
+  const elo = Math.max(500, Math.min(3000, Math.round(+$('botElo').value) || 800)), c = $('botColor').value;
+  const human = c === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : c;
+  $('botElo').value = elo;
+  try { localStorage.setItem('robo-bot', JSON.stringify({ elo, c })); } catch (e) {}
+  return { name: 'Playing Stockfish', desc: `Elo ${elo}. You play ${human === 'w' ? 'White' : 'Black'}.`, fen: PUZZLES[0].fen, bot: { elo, human } };
+}
+try { const v = JSON.parse(localStorage.getItem('robo-bot')); if (v) { $('botElo').value = v.elo; $('botColor').value = v.c; } } catch (e) {}
+$('botBtn').addEventListener('click', () => request('bot'));
+function startBotGame(bot) {
+  const g = game;
+  g.bot = { ...bot, brain: null };
+  g.phase = 'loading';
+  $('gMode').textContent = `You play ${bot.human === 'w' ? 'White' : 'Black'} · Stockfish at Elo ${bot.elo}`;
+  import('../bot/bot.js').then(mod => {
+    if (game !== g) return;
+    g.bot.brain = mod.newGame();
+    botNext(g);
+  }).catch(e => { console.error(e); botFailed(g); });
+}
+function botFailed(g) { if (game !== g) return; g.phase = 'done'; g.result = 'lose'; g.loseMsg = 'Stockfish could not start in this browser.'; refreshGame(); }
+function botNext(g) {
+  const b = g.bot, over = b.brain.over();
+  if (over) {
+    const humanMated = g.st.white === (b.human === 'w');
+    g.phase = 'done'; g.result = over !== 'mate' ? 'draw' : humanMated ? 'lose' : 'win';
+    g.loseMsg = 'Checkmate. Stockfish wins.'; g.winMsg = 'Checkmate. You win!'; g.drawMsg = `Draw: ${over}.`;
+    refreshGame(); return;
+  }
+  if (g.st.white === (b.human === 'w')) { g.phase = 'user'; refreshGame(); return; }
+  g.phase = 'robot'; refreshGame();
+  b.brain.think(b.elo, uci => {
+    if (game !== g) return;
+    const m = CH.legal(g.st).find(x => uciOf(x) === uci);
+    if (m) playMove(m); else botFailed(g);
+  }, () => botFailed(g));
+}
+const uciOf = m => CH.NAME(m.from) + CH.NAME(m.to) + (m.promo ? m.promo.toLowerCase() : '');
 function refreshGame() {
   if (!game) return;
   const g = game, st = CH.status(g.st), side = g.st.white ? 'White' : 'Black';
   let text = '', cls = '';
-  if (g.result === 'win') { text = 'Checkmate. Solved!'; cls = 'win'; }
+  if (g.result === 'win') { text = g.winMsg || 'Checkmate. Solved!'; cls = 'win'; }
+  else if (g.result === 'draw') text = g.drawMsg;
   else if (g.result === 'lose') { text = g.loseMsg || 'Not mate in two.'; cls = 'lose'; }
   else if (st === 'mate') { text = 'Checkmate. ' + (g.st.white ? 'Black' : 'White') + ' wins.'; cls = 'win'; }
   else if (st === 'stalemate') { text = 'Stalemate.'; }
   else if (g.held && g.held.queued === null) text = `Take the ${PIECE_NAME[agents[g.held.a].t.toLowerCase()]} off the board: click a free place on a tray.`;
-  else if (g.phase === 'robot') text = 'Black is thinking…';
+  else if (g.phase === 'loading') text = 'Starting Stockfish…';
+  else if (g.phase === 'robot') text = g.bot ? 'Stockfish is thinking…' : 'Black is thinking…';
   else if (g.phase === 'moving') text = 'Moving…';
-  else text = (g.m2 ? 'Your move' : side + ' to move') + (st === 'check' ? ' · check' : '');
+  else text = (g.m2 || g.bot ? 'Your move' : side + ' to move') + (st === 'check' ? ' · check' : '');
   $('gStatus').textContent = text; $('gStatus').className = 'game-status ' + cls;
   cv.classList.toggle('holding', !!(g.held && g.held.queued === null));
   $('gMoves').innerHTML = g.history.map((h, i) => (i % 2 === 0 ? `<b>${(i >> 1) + 1}.</b> ` : '') + h).join(' ') || '&nbsp;';
@@ -375,13 +430,17 @@ function playMove(m, byUser = false) {
       g.held = { a: victim, queued: null };
     }
   }
-  if (m.promo) {
+  const spare = m.promo ? agents.findIndex((ag, a) => inTray(a, m.promo)) : -1;
+  if (spare >= 0) {
     goals[mover] = freeTraySlot(m.piece, sqToCell(m.from));
-    const spare = agents.findIndex((ag, a) => inTray(a, m.promo));
     goals[spare] = sqToCell(m.to);
-  } else goals[mover] = sqToCell(m.to);
+  } else {
+    if (m.promo) agents[mover].t = m.promo; // no spare on the trays: the pawn's robot takes on the new piece
+    goals[mover] = sqToCell(m.to);
+  }
   if (m.castle) goals[map.get(sqToCell(m.rookFrom))] = sqToCell(m.rookTo);
   g.history.push(CH.san(g.st, m));
+  if (g.bot) g.bot.brain.play(uciOf(m));
   g.st = CH.make(g.st, m); g.last = m; g.sel = -1; g.hint = -1; g.phase = 'moving';
   refreshGame();
   setTimeout(() => {
@@ -398,6 +457,7 @@ function afterMove() {
     cells[g.held.a] = g.held.queued; g.held = null;
   }
   const st = CH.status(g.st);
+  if (g.bot) { botNext(g); return; }
   if (!g.m2) { g.phase = 'user'; refreshGame(); return; }
   if (!g.st.white) { // the user just moved
     g.userMoves++;
@@ -410,7 +470,7 @@ function afterMove() {
 }
 function legalFrom(sq) {
   if (!game) return [];
-  return CH.legal(game.st).filter(m => m.from === sq && (!m.promo || trayHas(m.promo)));
+  return CH.legal(game.st).filter(m => m.from === sq && (!m.promo || game.bot || trayHas(m.promo)));
 }
 function pickPromo(list) { // auto-promote to the best piece available in the tray
   for (const t of 'QRBN') { const m = list.find(x => x.promo && x.promo.toUpperCase() === t); if (m) return m; }
@@ -419,7 +479,11 @@ function pickPromo(list) { // auto-promote to the best piece available in the tr
 // =================== a captured piece in the hand ===================
 const PIECE_NAME = { k: 'king', q: 'queen', r: 'rook', b: 'bishop', n: 'knight', p: 'pawn' };
 const mouse = { x: 0, y: 0 };
-function trackMouse(e) { const rect = cv.getBoundingClientRect(); mouse.x = (e.clientX - rect.left) / S - PAD; mouse.y = (e.clientY - rect.top) / S - PAD; }
+function trackMouse(e) {
+  const rect = cv.getBoundingClientRect();
+  mouse.x = (e.clientX - rect.left) / S - PAD; mouse.y = (e.clientY - rect.top) / S - PAD;
+  if (flip) { mouse.x = 12 + 2 * GAP - mouse.x; mouse.y = 8 - mouse.y; }
+}
 window.addEventListener('pointermove', trackMouse);
 // the free tray cell nearest to a point; side: 0 = left tray, 1 = right tray, -1 = both
 function dropCell(x, y, side) {

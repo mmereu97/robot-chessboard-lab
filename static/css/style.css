@@ -69,6 +69,7 @@ select { width: 100%; font: inherit; color: var(--ink); background: var(--bg); b
 .btn:hover { border-color: var(--muted); }
 .btn[disabled] { opacity: .45; cursor: default; }
 input[type=range] { width: 100%; accent-color: var(--accent); }
+input[type=number] { width: 86px; flex: none; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
 .speed { display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
 section { margin-top: 40px; }
 h2 { font-family: var(--f-display); font-weight: 600; font-size: 24px; margin: 0 0 6px; text-wrap: balance; }

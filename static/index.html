@@ -49,6 +49,19 @@
       <button class="go" id="goBtn" type="button">Random puzzle <small id="queueTag">→</small></button>
       <button class="btn" id="resetBtn" type="button">Reset board to starting position</button>
       <div>
+        <p class="lbl">Play Stockfish</p>
+        <div class="row">
+          <input type="number" id="botElo" min="500" max="3000" step="50" value="800" aria-label="Stockfish Elo" title="Elo, 500 to 3000">
+          <select id="botColor" aria-label="Your color">
+            <option value="w">You play White</option>
+            <option value="b">You play Black</option>
+            <option value="r">Random color</option>
+          </select>
+        </div>
+        <button class="btn" id="botBtn" type="button" style="width:100%;margin-top:8px">Play Stockfish</button>
+        <p class="sub" style="margin:8px 0 0;font-size:12.5px">Below Elo 1320 it plays and errs like a person.</p>
+      </div>
+      <div>
         <p class="lbl">Random from</p>
         <select id="poolSel" aria-label="Random pool">
           <option value="all">All positions</option>
