@@ -24,8 +24,14 @@ try { const s = localStorage.getItem('robo-algo2'); if (s && ALGOS[s]) algo = s;
 const KING_BASE_RULE = 0.78;   // the usual guideline: king's base = 78% of the square (not in the FIDE rules)
 const theme = () => $('pieceTheme').value;
 try { const t = localStorage.getItem('robo-theme'); if (t) $('pieceTheme').value = t; else if (localStorage.getItem('robo-discs') === '1') $('pieceTheme').value = 'discs'; } catch (e) {}
-function applyThemeDiameter() { if (theme() === 'true') { $('diam').value = KING_BASE_RULE; $('diamVal').textContent = KING_BASE_RULE.toFixed(2) + ' of a square'; } }
-$('pieceTheme').addEventListener('change', () => { try { localStorage.setItem('robo-theme', theme()); } catch (e) {} applyThemeDiameter(); });
+const insideBase = t => t === 'true' || t === 'ring';
+function applyThemeDiameter() { if (insideBase(theme())) { $('diam').value = KING_BASE_RULE; $('diamVal').textContent = KING_BASE_RULE.toFixed(2) + ' of a square'; } }
+let lastTheme = theme();
+$('pieceTheme').addEventListener('change', () => {
+  try { localStorage.setItem('robo-theme', theme()); } catch (e) {}
+  if (!insideBase(lastTheme)) applyThemeDiameter();   // between the two "inside" themes the slider stays where it is
+  lastTheme = theme();
+});
 // the part of each image the symbol really uses, in fractions of the image (measured once, when needed)
 const SYMBOL_BOX = {};
 function symbolBox(t, img) {
@@ -288,10 +294,11 @@ function drawMagnet(p) {
 function drawPiece(ag, p, lifted) {
   const x = p.screen ? p.x : vx(p.x), y = p.y;
   const img = PIECE_IMG[ag.t];
-  if (theme() === 'true' && img && img.complete && img.naturalWidth) {
+  if (insideBase(theme()) && img && img.complete && img.naturalWidth) {
     const D = diam(), b = symbolBox(ag.t, img), w = b.x1 - b.x0, h = b.y1 - b.y0;
     const size = D / Math.hypot(w, h);     // the symbol's corners touch the circle at most
     ctx.save();
+    if (theme() === 'ring') { ctx.strokeStyle = tok['--muted']; ctx.globalAlpha = 0.55; ctx.lineWidth = 0.015; ctx.beginPath(); ctx.arc(x, y, D / 2, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
     if (lifted) { ctx.shadowColor = tok['--shadow']; ctx.shadowBlur = 0.12 * S; ctx.shadowOffsetY = 0.04 * S; }
     ctx.drawImage(img, x - size * (b.x0 + w / 2), y - size * (b.y0 + h / 2), size, size);
     ctx.restore();

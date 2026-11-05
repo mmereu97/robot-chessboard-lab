@@ -43,7 +43,7 @@ Compute times are from one run in headless Chromium and will differ on your mach
 
 ## Piece themes
 
-Every piece is imagined as the same small robot, with the same round base, so only the drawing changes. Under Movement rules: **Discs**, **Lichess**, and **Lichess, inside the base**. The third is for experiments where size matters: each symbol is shrunk until it fits inside an invisible circle as wide as the base the planner checks, so pieces that do not collide also do not overlap on screen. The circle follows the Piece diameter slider and starts at 0.78 of a square.
+Every piece is imagined as the same small robot, with the same round base, so only the drawing changes. Under Movement rules: **Discs**, **Lichess**, **Lichess, inside the base**, and the same **with circle**. The last two are for experiments where size matters: each symbol is shrunk until it fits inside a circle as wide as the base the planner checks, invisible or drawn, so pieces that do not collide also do not overlap on screen. The circle follows the Piece diameter slider and starts at 0.78 of a square.
 
 That 78% is the usual guideline (1.75-inch king's base on a 2.25-inch square), not a FIDE rule. The current [FIDE equipment rules](https://handbook.fide.com/chapter/ChessEquipmentWithoutElectronicComponenets032026) give standard heights (king 95 mm, down to pawn 50 mm), a base diameter of 40–50% of each piece's height, and squares of 5–6 cm on which four pawns must fit. That allows a king's base of anywhere from 63% to 95% of the square.
 
