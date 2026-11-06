@@ -110,3 +110,5 @@ td.best { color: var(--good); font-weight: 500; }
 canvas.clickable { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .go { transition: none; } }
 canvas.holding { cursor: grabbing; }
+#cv.clickable { touch-action: none; }
+#cv.dragging { cursor: grabbing; }

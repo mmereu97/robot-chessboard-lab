@@ -272,9 +272,12 @@ function draw() {
   const order = [...agents.keys()].sort((x, y) => moving[x] - moving[y]);
   const held = game && game.held;
   if (held && held.queued !== null) P[held.a] = cellXY(held.queued);
+  if (game && game.placing) P[game.placing.a] = cellXY(game.placing.cell);
+  const dragged = drag && drag.moved ? drag.a : -1;
   drawGameMarks();
-  for (const a of order) if (!held || held.queued !== null || a !== held.a) drawPiece(agents[a], P[a], moving[a]);
+  for (const a of order) if (a !== dragged && (!held || held.queued !== null || a !== held.a)) drawPiece(agents[a], P[a], moving[a]);
   drawGameDots();
+  if (dragged >= 0) drawPiece(agents[dragged], { x: mouse.x, y: mouse.y, screen: true }, 1);
   if (held && held.queued === null) {
     // where it would land, then the piece itself on the cursor
     const side = traySide(mouse.x), c = side < 0 ? null : dropCell(mouse.x, mouse.y, side);
@@ -417,7 +420,7 @@ function freeTraySlot(type, nearCell) {
 const inTray = (a, type) => agents[a].t === type && isTrayCell(cells[a]) && !(game && game.held && game.held.a === a);
 function trayHas(type) { return agents.some((ag, a) => inTray(a, type)); }
 // physical move: which robot goes where (capture to tray, rook in castling, promotion swap with a tray piece)
-function playMove(m, byUser = false) {
+function playMove(m, byUser = false, dropped = false) {
   const g = game, map = boardAgents(), goals = cells.slice();
   const mover = map.get(sqToCell(m.from));
   if (m.capSq >= 0) {
@@ -437,6 +440,13 @@ function playMove(m, byUser = false) {
   } else {
     if (m.promo) agents[mover].t = m.promo; // no spare on the trays: the pawn's robot takes on the new piece
     goals[mover] = sqToCell(m.to);
+    if (dropped) {
+      // Put there by hand, so no robot carries it. If the piece it took is still on that square, or the
+      // rook has to pass it when castling, the planner sees it waiting at home until that is done;
+      // it is drawn where it was dropped.
+      if (m.castle || (m.capSq === m.to && !g.held)) { g.placing = { a: mover, cell: goals[mover] }; goals[mover] = cells[mover]; }
+      else { cells = cells.slice(); cells[mover] = goals[mover]; }
+    }
   }
   if (m.castle) goals[map.get(sqToCell(m.rookFrom))] = sqToCell(m.rookTo);
   g.history.push(CH.san(g.st, m));
@@ -452,6 +462,7 @@ function playMove(m, byUser = false) {
 }
 function afterMove() {
   const g = game; if (!g) return;
+  if (g.placing) { cells[g.placing.a] = g.placing.cell; g.placing = null; }
   if (g.held) { // play goes on only once the captured piece is off the board
     if (g.held.queued === null) { g.phase = 'hold'; refreshGame(); return; }
     cells[g.held.a] = g.held.queued; g.held = null;
@@ -512,15 +523,46 @@ function releaseHeld() {
   if (c !== null) cells[g.held.a] = c;
   g.held = null; cv.classList.remove('holding');
 }
+// the square under the pointer, or -1 outside the board
+function squareAtMouse() {
+  const f = Math.floor(mouse.x - 2 - GAP), r = Math.floor(mouse.y);
+  return f < 0 || f > 7 || r < 0 || r > 7 ? -1 : r * 8 + f;
+}
+const canMove = g => g && !anim && g.phase === 'user' && !g.held && CH.status(g.st) !== 'mate' && CH.status(g.st) !== 'stalemate';
+// =================== dragging a piece, as on chess.com or lichess (clicking two squares still works) ===================
+const DRAG_START = 0.12;   // squares the pointer has to travel before a press counts as a drag
+let drag = null, skipClick = false;
+cv.addEventListener('pointerdown', e => {
+  skipClick = false;
+  if (e.button !== 0) return;
+  trackMouse(e);
+  const g = game, sq = squareAtMouse();
+  if (!canMove(g) || sq < 0 || !legalFrom(sq).length) return;
+  drag = { sq, a: boardAgents().get(sqToCell(sq)), x: mouse.x, y: mouse.y, moved: false };
+});
+window.addEventListener('pointermove', () => {
+  if (!drag || drag.moved || Math.hypot(mouse.x - drag.x, mouse.y - drag.y) < DRAG_START) return;
+  drag.moved = true; game.sel = drag.sq; game.hint = -1; cv.classList.add('dragging');
+});
+window.addEventListener('pointerup', e => {
+  const d = drag; drag = null; cv.classList.remove('dragging');
+  if (!d || !d.moved) return;
+  trackMouse(e);
+  skipClick = true;
+  const g = game, to = squareAtMouse();
+  const ms = canMove(g) && to !== d.sq ? legalFrom(d.sq).filter(m => m.to === to) : [];
+  if (ms.length) playMove(ms.length > 1 ? pickPromo(ms) : ms[0], true, true);
+});
+window.addEventListener('pointercancel', () => { drag = null; cv.classList.remove('dragging'); });
 cv.addEventListener('click', e => {
   const g = game;
+  if (skipClick) { skipClick = false; return; }
   trackMouse(e);
   if (g && g.held && g.held.queued === null) { dropHeld(); return; }
   if (!g || anim || g.phase !== 'user' || CH.status(g.st) === 'mate' || CH.status(g.st) === 'stalemate') return;
-  const ux = mouse.x, uy = mouse.y;
-  const f = Math.floor(ux - 2 - GAP), r = Math.floor(uy);
-  if (f < 0 || f > 7 || r < 0 || r > 7) { g.sel = -1; return; }
-  const sq = r * 8 + f, p = g.st.b[sq];
+  const sq = squareAtMouse();
+  if (sq < 0) { g.sel = -1; return; }
+  const p = g.st.b[sq];
   if (g.sel >= 0) {
     const ms = legalFrom(g.sel).filter(m => m.to === sq);
     if (ms.length) { playMove(ms.length > 1 ? pickPromo(ms) : ms[0], true); return; }
@@ -543,6 +585,10 @@ function drawGameMarks() {
 }
 function drawGameDots() {
   const g = game; if (!g || anim || g.sel < 0) return;
+  if (drag && drag.moved && legalFrom(g.sel).some(m => m.to === squareAtMouse())) {
+    const q = squareAtMouse();
+    ctx.strokeStyle = tok['--accent']; ctx.lineWidth = 0.05; ctx.strokeRect(sqX(q) - 0.475, sqY(q) - 0.475, 0.95, 0.95);
+  }
   for (const m of legalFrom(g.sel)) {
     ctx.fillStyle = tok['--accent']; ctx.globalAlpha = 0.85;
     ctx.beginPath();
