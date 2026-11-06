@@ -316,6 +316,10 @@ function segPos(seg, t) {
   const pts = seg.pts;
   if (t <= seg.t0) return pts[0];
   if (t >= seg.t1) return pts[pts.length - 1];
+  if (seg.type === 'track') {   // a position every dt
+    const u = (t - seg.t0) / seg.dt, k = Math.min(pts.length - 2, Math.floor(u)), f = u - k;
+    return { x: pts[k].x + (pts[k + 1].x - pts[k].x) * f, y: pts[k].y + (pts[k + 1].y - pts[k].y) * f };
+  }
   if (seg.type === 'steps') {
     const u = t - seg.t0, k = Math.min(pts.length - 2, Math.floor(u)), f = u - k;
     return { x: pts[k].x + (pts[k + 1].x - pts[k].x) * f, y: pts[k].y + (pts[k + 1].y - pts[k].y) * f };
@@ -865,7 +869,7 @@ function lineSeg(a, t0, p, q) {
 // has passed. A trip starts as soon as it collides with nothing already under way.
 // With `extra` it plans a single trip along given points, from free positions: a captured piece going to a
 // tray. extra = { pos: every piece's position, a, pts, rect: j => the tray a piece must stay in, or null }.
-// A piece in a tray stays where it was pushed instead of going back.
+// A piece in a tray stays where it was pushed instead of going back. Instead of pts, extra.to asks for a route to that point.
 function planNudge(starts, goals, opt, extra) {
   const n = starts.length, DIAM = opt.diam || 0.76, diag = opt.diag;
   const R = DIAM + 0.01, HARD = DIAM + 0.004, TICK = 0.05, TRY = 0.25;
@@ -886,7 +890,7 @@ function planNudge(starts, goals, opt, extra) {
       }
       return L * (1 + 4 * push / steps);
     };
-    const s = pos(a), g = cellXY(goal), S0 = node(2 * s.x, 2 * s.y), G0 = node(2 * g.x, 2 * g.y);
+    const s = pos(a), g = extra && extra.to ? extra.to : cellXY(goal), S0 = node(2 * s.x, 2 * s.y), G0 = node(2 * g.x, 2 * g.y);
     const best = new Float64Array(LX * LY).fill(Infinity), prev = new Int32Array(LX * LY).fill(-1), heap = new Heap();
     const est = (x, y) => Math.hypot(g.x - x, g.y - y);
     best[S0] = 0; heap.push({ f: est(s.x, s.y), st: S0 });
@@ -991,7 +995,7 @@ function planNudge(starts, goals, opt, extra) {
 
   // one trip: the piece, the pieces that make way, and when each of them moves
   function trip(a, goal, wide = false) {
-    const pts = extra ? extra.pts.slice() : route(a, goal), room = makeRoom(a, pts);
+    const pts = extra && extra.pts ? extra.pts.slice() : route(a, goal), room = makeRoom(a, pts);
     if (!room) return null;
     const main = motionSeg(a, 0, pts), times = [];
     const when = arc => { let lo = 0, hi = main.prof.T; for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (main.prof.s(m) < arc) lo = m; else hi = m; } return hi; };

@@ -194,32 +194,25 @@ function pileUp(plan) {
     pos[a].x = best.x; pos[a].y = best.y;
     list.push(pos[a]);
   });
-  // pieces leaving a tray: the first stretch of their trip starts from where they lie
-  agents.forEach((_, a) => {
-    if (!loose[a] || !by[a].length) return;
-    const first = by[a][0], start = loose[a];
-    first.pts = [start, ...first.pts.slice(1)];
+  // Pieces leaving a tray: one at a time on the magnet, the first stretch starts from where they lie. All at
+  // once, each first goes from where it lies to its grid place, and from there the planner's paths hold.
+  const leaving = agents.map((_, a) => a).filter(a => loose[a] && by[a].length);
+  if (plan.parallel === false) leaving.forEach(a => {
+    const first = by[a][0];
+    first.pts = [loose[a], ...first.pts.slice(1)];
     refit(first);
     loose[a] = null;
   });
-  // pieces arriving on a tray: the last stretch ends in the heap; pieces already there on the grid slide into it
-  let mk = plan.makespan;
-  agents.forEach((_, a) => {
-    if (!final[a] || !pos[a] || pos[a].fixed) { if (!final[a]) loose[a] = null; return; }
-    const to = { x: pos[a].x, y: pos[a].y };
-    if (by[a].length) {
-      const end = by[a][by[a].length - 1];
-      end.pts = [...end.pts.slice(0, -1), to];
-      refit(end);
-      mk = Math.max(mk, end.t1);
-    } else {
-      const s = lineSeg(a, 0, loose[a] || cellXY(plan.starts[a]), to);
-      plan.segs.push(s);
-      mk = Math.max(mk, s.t1);
-    }
-    loose[a] = to;
-  });
-  plan.makespan = mk;
+  else if (leaving.length) {
+    const out = leaving.map(a => lineSeg(a, 0, loose[a], cellXY(plan.starts[a])));
+    const lead = Math.max(...out.map(s => s.t1));
+    plan.segs.forEach(s => { s.t0 += lead; s.t1 += lead; });
+    plan.segs.push(...out);
+    plan.makespan += lead;
+    leaving.forEach(a => { loose[a] = null; });
+  }
+  settleTrays(plan, pos, final, left);
+  const mk = plan.makespan;
   // the clearance on show is the real one, heap included
   const by2 = buildIndex(plan, agents.length), lying = loose.slice();
   let least = Infinity;
@@ -228,6 +221,69 @@ function pileUp(plan) {
     for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) least = Math.min(least, Math.hypot(P[i].x - P[j].x, P[i].y - P[j].y));
   }
   plan.clearance = least;
+}
+// The trays, like magnets that repel. The planners bring each arriving piece to its grid place, and what lies on
+// a tray is pushed out of the way of whatever moves, by the least that keeps the distance. A piece that has
+// arrived then drifts to its place in the heap, and stops there or as soon as something is in its way.
+function settleTrays(plan, pos, final, left) {
+  const DT = 0.04, n = agents.length, NEED = diam() + 0.012, by = buildIndex(plan, n);
+  const endOf = a => by[a].length ? by[a][by[a].length - 1].t1 : 0;
+  const P = agents.map((_, a) => { const q = by[a].length ? agentPos(by, a, plan.starts[a], 0) : (loose[a] || cellXY(plan.starts[a])); return { x: q.x, y: q.y }; });
+  const soft = new Uint8Array(n), first = new Int32Array(n).fill(-1), track = agents.map(() => []);
+  const want = agents.map((_, a) => final[a] && pos[a] && !pos[a].fixed ? { x: pos[a].x, y: pos[a].y, stuck: 0 } : null);
+  const inTray = (a, q) => { const r = trayRect(left(a)); q.x = Math.max(r.x0, Math.min(r.x1, q.x)); q.y = Math.max(r.y0, Math.min(r.y1, q.y)); };
+  const free = (a, q) => P.every((o, j) => j === a || Math.hypot(o.x - q.x, o.y - q.y) >= NEED);
+  let tick = 0;
+  for (;; tick++) {
+    const t = tick * DT;
+    for (let a = 0; a < n; a++) {
+      if (final[a] && !soft[a] && t >= endOf(a)) { soft[a] = 1; first[a] = tick; if (by[a].length) { const e = by[a][by[a].length - 1].pts; const q = e[e.length - 1]; P[a] = { x: q.x, y: q.y }; } }
+      if (!soft[a] && by[a].length) { const q = agentPos(by, a, plan.starts[a], t); P[a] = { x: q.x, y: q.y }; }
+    }
+    let busy = false;
+    for (let a = 0; a < n; a++) {   // drifting to its place, never pushing anything
+      const w = want[a]; if (!soft[a] || !w) continue;
+      const d = Math.hypot(w.x - P[a].x, w.y - P[a].y);
+      if (d < 1e-3) { want[a] = null; continue; }
+      busy = true;
+      const f = Math.min(1, DT / d), q = { x: P[a].x + (w.x - P[a].x) * f, y: P[a].y + (w.y - P[a].y) * f };
+      if (free(a, q)) { P[a] = q; w.stuck = 0; } else if (++w.stuck > 25) want[a] = null;
+    }
+    for (let it = 0; it < 8; it++) {   // pushed by whatever comes too close
+      let pushed = false;
+      for (let i = 0; i < n; i++) {
+        if (!soft[i]) continue;
+        for (let j = 0; j < n; j++) {
+          if (j === i || (soft[j] && j < i)) continue;
+          const dx = P[i].x - P[j].x, dy = P[i].y - P[j].y, d = Math.hypot(dx, dy) || 1e-3, gap = NEED + 1e-4 - d;
+          if (gap <= 0) continue;
+          pushed = true;
+          const ux = dx / d || 0.6, uy = dy / d || 0.8, wi = soft[j] ? 0.5 : 1;
+          P[i] = { x: P[i].x + ux * gap * wi, y: P[i].y + uy * gap * wi }; inTray(i, P[i]);
+          if (soft[j]) { P[j] = { x: P[j].x - ux * gap * wi, y: P[j].y - uy * gap * wi }; inTray(j, P[j]); }
+        }
+      }
+      if (!pushed) break;
+      busy = true;
+    }
+    for (let a = 0; a < n; a++) if (soft[a]) track[a].push({ x: P[a].x, y: P[a].y });
+    if ((t >= plan.makespan && !busy) || t > plan.makespan + 4) break;
+  }
+  let mk = plan.makespan;
+  for (let a = 0; a < n; a++) {
+    if (!final[a]) { loose[a] = null; continue; }
+    const tr = track[a], moved = i => Math.hypot(tr[i].x - tr[0].x, tr[i].y - tr[0].y) > 1e-4;
+    let i0 = 0, i1 = tr.length - 1;
+    while (i0 < tr.length && !moved(i0)) i0++;
+    if (i0 < tr.length) {
+      while (i1 > i0 && Math.hypot(tr[i1].x - tr[i1 - 1].x, tr[i1].y - tr[i1 - 1].y) < 1e-6) i1--;
+      const t0 = (first[a] + i0 - 1) * DT, pts = tr.slice(Math.max(0, i0 - 1), i1 + 1);
+      plan.segs.push({ a, type: 'track', t0, t1: t0 + (pts.length - 1) * DT, dt: DT, pts });
+      mk = Math.max(mk, t0 + (pts.length - 1) * DT);
+    }
+    loose[a] = { x: P[a].x, y: P[a].y };
+  }
+  plan.makespan = mk;
 }
 // a segment whose end points changed: same start time, and its timing follows the new length
 function refit(seg) {
@@ -738,11 +794,22 @@ const trayOf = j => isTrayCell(cells[j]) ? trayRect(cx(cells[j]) < TRAY_W) : nul
 function roomPlan(a, pts, inAir = false) {
   const pos = agents.map((_, j) => j === a ? pts[0] : (loose[j] || cellXY(cells[j])));
   const plan = planNudge(cells, cells, opt(), { pos, a, pts, inAir, rect: j => j === a ? null : trayOf(j) });
-  if (!plan.ok) return null;
+  return plan.ok ? keepRoom(plan) : null;
+}
+function keepRoom(plan) {
   plan.starts = cells.slice(); plan.goals = cells.slice();
   for (const s of plan.stayed) loose[s.j] = s.at;
   return plan;
 }
+// What a route costs: its own length plus how far each piece has to step aside, so that a short way
+// past a few pieces moving a little beats both a long way round and a piece running along the route.
+const disturbance = (plan, a) => {
+  const off = new Map();
+  plan.segs.forEach(s => { if (s.a !== a) off.set(s.a, Math.max(off.get(s.a) || 0, s.L)); });
+  let sum = 0; off.forEach(L => { sum += L; });
+  return sum;
+};
+const routeCost = (plan, a) => plan.segs.find(s => s.a === a).L + disturbance(plan, a);
 // points on a tray to try when a piece does not fit where it should: the closest and least crowded first
 function spotsNear(a, q0, left) {
   const r = trayRect(left), D = diam(), spots = [];
@@ -757,12 +824,31 @@ function removeToTray(a, fromCell, slot) {
   const from = cellXY(fromCell), left = cx(slot) < TRAY_W, r = trayRect(left), edge = left ? r.x1 : r.x0;
   const tries = [{ x: edge, y: from.y }, ...spotsNear(a, from, left)];
   const before = cells;
-  for (const end of tries) {
+  const straight = end => {
     const L = Math.hypot(end.x - from.x, end.y - from.y), m = Math.max(2, Math.round(L / 0.05)), pts = [];
     for (let i = 0; i <= m; i++) pts.push({ x: from.x + (end.x - from.x) * i / m, y: from.y + (end.y - from.y) * i / m });
-    cells = before.slice(); cells[a] = slot;
-    const plan = roomPlan(a, pts);
-    if (plan) { loose[a] = end; return plan; }
+    return pts;
+  };
+  const pos = agents.map((_, j) => j === a ? from : (loose[j] || cellXY(cells[j])));
+  const attempt = extra => { const plan = planNudge(cells, cells, opt(), { pos, a, inAir: false, rect: j => j === a ? null : trayOf(j), ...extra }); return plan.ok ? plan : null; };
+  cells = before.slice(); cells[a] = slot;
+  // straight along its rank, if that disturbs nothing; if it does, routes to other points on the edge of the tray, between pieces too
+  const direct = attempt({ pts: straight(tries[0]) });
+  if (direct && disturbance(direct, a) < 1e-6) { loose[a] = tries[0]; return keepRoom(direct); }
+  let best = direct, bestEnd = tries[0], bestCost = direct ? routeCost(direct, a) : Infinity;
+  const inlet = left ? TRAY_W - 0.5 : W - TRAY_W + 0.5;
+  for (let y = Math.max(r.y0, from.y - 2); y <= Math.min(r.y1, from.y + 2) + 1e-9; y += 0.25) {
+    const to = { x: inlet, y: Math.round(y * 2) / 2 };
+    if (to.y < r.y0 || to.y > r.y1) continue;
+    const plan = attempt({ to });
+    if (!plan) continue;
+    const pts = plan.segs.find(s => s.a === a).pts, end = pts[pts.length - 1], cost = routeCost(plan, a);
+    if (cost < bestCost - 1e-6) { best = plan; bestEnd = end; bestCost = cost; }
+  }
+  if (best) { loose[a] = bestEnd; return keepRoom(best); }
+  for (const end of tries.slice(1)) {
+    const plan = attempt({ pts: straight(end) });
+    if (plan) { loose[a] = end; return keepRoom(plan); }
   }
   cells = before;
   return null;
