@@ -825,18 +825,26 @@ function minClearance(plan, starts) {
   return best;
 }
 
+// one piece along a line, with the same motor profile as the others
+function lineSeg(a, t0, p, q) {
+  const L = Math.hypot(q.x - p.x, q.y - p.y), prof = trapezoid(L);
+  return { a, type: 'motion', t0, t1: t0 + prof.T, pts: [p, q], cum: [0, L], L, prof };
+}
 // ---------- 6: pieces step aside, by the least that lets a moving piece through ----------
 // No grid here: positions are continuous and pieces are circles of the chosen diameter. Each trip gets
 // a route that disturbs as little as possible. Pieces too close to the route slide off it just far
 // enough for the circle to pass, moving their neighbours only if they touch them, and go home once it
 // has passed. A trip starts as soon as it collides with nothing already under way.
-function planNudge(starts, goals, opt) {
+// With `extra` it plans a single trip along given points, from free positions: a captured piece going to a
+// tray. extra = { pos: every piece's position, a, pts, rect: j => the tray a piece must stay in, or null }.
+// A piece in a tray stays where it was pushed instead of going back.
+function planNudge(starts, goals, opt, extra) {
   const n = starts.length, DIAM = opt.diam || 0.76, diag = opt.diag;
   const R = DIAM + 0.01, HARD = DIAM + 0.004, TICK = 0.05, TRY = 0.25;
   const minX = DIAM / 2, maxX = W - DIAM / 2, minY = DIAM / 2, maxY = H - DIAM / 2;
   const LX = 2 * W + 1, LY = 2 * H + 1, node = (i, j) => j * LX + i;
   const place = starts.slice();                 // where each piece is once everything planned so far is done
-  const pos = a => cellXY(place[a]);
+  const pos = a => extra ? extra.pos[a] : cellXY(place[a]);
 
   // A* on a half-square lattice; coming close to a piece costs what that piece would have to move
   function route(a, goal) {
@@ -907,6 +915,8 @@ function planNudge(starts, goals, opt) {
         else {
           const k = Math.min(pts.length - 1, i + 2), l = Math.max(0, i - 2), tx = pts[k].x - pts[l].x, ty = pts[k].y - pts[l].y, tl = Math.hypot(tx, ty) || 1;
           ux = -ty / tl; uy = tx / tl;
+          // at the end of a trip into a tray, the piece in the way goes further in
+          if (extra && extra.rect(j) && i >= pts.length - 3 && tl > 1e-6) { ux = tx / tl; uy = ty / tl; X[j] = { x: X[j].x + ux * (R - d), y: X[j].y + uy * (R - d) }; continue; }
           const room = o => { let q = 0; for (let b = 0; b < n; b++) if (b !== j && b !== a) { const e = Math.hypot(X[b].x - X[j].x - o * ux, X[b].y - X[j].y - o * uy); if (e < 1.2) q += 1.2 - e; } return q; };
           if (room(1) > room(-1)) { ux = -ux; uy = -uy; }
         }
@@ -930,7 +940,10 @@ function planNudge(starts, goals, opt) {
         const ux = d > 1e-6 ? dx / d : 1, uy = d > 1e-6 ? dy / d : 0, gap = (HARD - d) / 2;
         X[i] = { x: X[i].x - ux * gap, y: X[i].y - uy * gap }; X[j] = { x: X[j].x + ux * gap, y: X[j].y + uy * gap };
       }
-      for (let j = 0; j < n; j++) if (j !== a) X[j] = { x: Math.max(minX, Math.min(maxX, X[j].x)), y: Math.max(minY, Math.min(maxY, X[j].y)) };
+      for (let j = 0; j < n; j++) if (j !== a) {
+        const b = (extra && extra.rect(j)) || { x0: minX, x1: maxX, y0: minY, y1: maxY };
+        X[j] = { x: Math.max(b.x0, Math.min(b.x1, X[j].x)), y: Math.max(b.y0, Math.min(b.y1, X[j].y)) };
+      }
       if (worst <= 0) return { X, closest };
     }
     return null;
@@ -944,12 +957,12 @@ function planNudge(starts, goals, opt) {
     let s = l[0]; for (const x of l) { if (x.t0 <= t) s = x; else break; }
     return segPos(s, t);
   };
-  const pos0 = starts.map(cellXY);
+  const pos0 = extra ? extra.pos : starts.map(cellXY);
   let temps = 0, moved = new Set(), most = 0, nudgeSum = 0, nudgeN = 0;
 
   // one trip: the piece, the pieces that make way, and when each of them moves
   function trip(a, goal, wide = false) {
-    const pts = route(a, goal), room = makeRoom(a, pts);
+    const pts = extra ? extra.pts.slice() : route(a, goal), room = makeRoom(a, pts);
     if (!room) return null;
     const main = motionSeg(a, 0, pts), times = [];
     const when = arc => { let lo = 0, hi = main.prof.T; for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (main.prof.s(m) < arc) lo = m; else hi = m; } return hi; };
@@ -995,7 +1008,8 @@ function planNudge(starts, goals, opt) {
     const segs = [{ ...tr.main, t0: t + tr.lead, t1: t + tr.lead + tr.main.prof.T }];
     for (const m of tr.moves) {
       const out = t + tr.lead + m.t0, back = t + tr.lead + m.t1;
-      segs.push(motionSeg(m.j, out, [m.h, m.y]), motionSeg(m.j, Math.max(back, out + m.dur), [m.y, m.h]));
+      segs.push(motionSeg(m.j, out, [m.h, m.y]));
+      if (!(extra && extra.rect(m.j))) segs.push(motionSeg(m.j, Math.max(back, out + m.dur), [m.y, m.h]));
     }
     return segs;
   }
@@ -1033,6 +1047,15 @@ function planNudge(starts, goals, opt) {
     let tr = trip(a, goal), t = tr ? earliest(tr) : -1;
     if (tr && t < 0) { tr = trip(a, goal, true); t = tr ? earliest(tr) : -1; }
     return t < 0 ? null : { tr, t, end: t + tr.span };
+  }
+  if (extra) {
+    const c = bestTrip(extra.a, -1);
+    if (!c) return { ok: false };
+    commit(c.tr, c.t);
+    const segs = by.flat();
+    return { ok: true, segs, car: null, makespan: Math.max(...busyUntil), dist: segs.reduce((v, s) => v + s.L, 0), carEmpty: 0,
+      moves: new Set(segs.map(s => s.a)).size, temps: 0, waits: 0, parallel: true, clearance: DIAM, algo: 'nudge', diam: DIAM, lb: 0,
+      stayed: c.tr.moves.filter(m => extra.rect(m.j)).map(m => ({ j: m.j, at: m.y })) };
   }
   const taken = c => place.includes(c);
   let pending = []; starts.forEach((c, a) => { if (c !== goals[a]) pending.push(a); });

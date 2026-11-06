@@ -54,7 +54,7 @@ A geometric consequence to keep in mind: a piece moving diagonally between two p
 
 ## Tidy trays
 
-A piece has no place of its own on a tray. Each colour fills its back column first, then the front one, with whatever comes. Duration alone is not what makes a move look right: a planner chasing only the clock will happily make pawns step aside to let a knight squeeze in behind them, which no person would do. So:
+Between positions, the pieces not in play wait on the two columns next to the board. A piece has no place of its own there. Each colour fills its back column first, then the front one, with whatever comes. Duration alone is not what makes a move look right: a planner chasing only the clock will happily make pawns step aside to let a knight squeeze in behind them, which no person would do. So:
 
 - a piece does not squeeze in behind another: the piece in front steps back and the newcomer takes its place;
 - in the Fastest reset planner, pieces that stay put reserve their squares first, and each piece that has to step aside counts as extra duration.
@@ -65,9 +65,13 @@ Over the same 25 transitions (mean of three runs), pieces stepping aside with no
 
 Drag a piece to its square, as on chess.com or lichess, or click the piece and then the square. A dragged piece is put down by you, so no robot carries it; the robots only clear what is in the way: a captured piece when captures by hand are off, the rook when castling. Dropped on a square it cannot go to, it returns home.
 
-## Which tray
+## The trays
 
-A captured piece goes to the tray on its side of the board: files a to d to the left one, e to h to the right one. Untick the option and it goes to the tray of its colour, as between positions. Each tray has 4 columns of 8, so all the pieces fit on either; the far column fills first. If a tray is full, the piece goes to the other one.
+The trays have no fixed places. Each is wide enough for all 32 pieces in rows and columns at the chosen diameter, plus 10% of free room. A captured piece goes the shortest way to the nearest tray: along its rank to the tray's edge, stopping as soon as it is inside. The pieces already there move by the least that makes it fit, and stay where they were pushed. Dropped by hand, a piece lies where you put it, by the same rule. Untick the option and it goes to the tray of its colour instead.
+
+Tested with all 32 pieces going one by one to the same tray, at diameters from 0.6 to 0.9: they never overlap. When a tray is nearly full, a piece may not find room this way (between 0 and 5 of the 32, more at the largest diameter), and then it goes to a grid place on the tray instead.
+
+The planners work on a grid, so before the next position the pieces on the trays slide to places on it. Promotion needs no spare from a tray: the pawn's robot takes on the new piece.
 
 ## Captures by hand
 
@@ -81,7 +85,7 @@ Pieces are not tied to parking places: every plan starts from where the pieces r
 
 Set an Elo from 500 to 3000, pick a color and press Play Stockfish: the robots carry out both sides' moves on the board. The bot is the one from [chess-analysis-board](https://github.com/mmereu97/chess-analysis-board), copied with its calibration unchanged. Below Elo 1320 it plays and errs like a person: sound opening moves, moves played for an idea, instinctive checks, a rare blunder. From 1320 up it is Stockfish's own strength limit. Playing Black turns the board around. The engine loads only when you start a game.
 
-A pawn always promotes, to a spare queen from the tray if there is one. With no spare on the trays, its robot takes on the new piece.
+A pawn always promotes, to a queen.
 
 ## Run
 
