@@ -117,6 +117,8 @@ $('nextBtn').addEventListener('click', () => request(stepKey(1)));
 $('prevBtn').addEventListener('click', () => request(stepKey(-1)));
 function setTrails(on) { $('optTrails').checked = on; $('trailBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); try { localStorage.setItem('robo-trails', on ? '1' : '0'); } catch (e) {} }
 $('trailBtn').addEventListener('click', () => setTrails(!$('optTrails').checked));
+try { const v = localStorage.getItem('robo-side'); if (v !== null) $('optSide').checked = v === '1'; } catch (e) {}
+$('optSide').addEventListener('change', () => { try { localStorage.setItem('robo-side', $('optSide').checked ? '1' : '0'); } catch (e) {} });
 $('optTrails').addEventListener('change', () => setTrails($('optTrails').checked));
 try { const v = localStorage.getItem('robo-trails'); if (v !== null) setTrails(v === '1'); } catch (e) {}
 $('resetBtn').addEventListener('click', () => request('p0'));
@@ -184,14 +186,14 @@ $('cmpBody').addEventListener('click', e => {
 });
 
 // =================== desen ===================
-const vx = gx => gx + GAP * Math.min(1, Math.max(0, gx - 1.5)) + GAP * Math.min(1, Math.max(0, gx - 9.5));
+const vx = gx => gx + GAP * Math.min(1, Math.max(0, gx - TRAY_W + 0.5)) + GAP * Math.min(1, Math.max(0, gx - W + TRAY_W + 0.5));
 let S = 100, tok = {};
 function readTokens() {
   const cs = getComputedStyle(document.documentElement);
   ['--good','--panel','--ink','--muted','--line','--sq-light','--sq-dark','--tray','--tray-slot','--accent','--pw','--pw-ink','--pb','--pb-ink','--shadow'].forEach(k => tok[k] = cs.getPropertyValue(k).trim());
 }
 function resize() {
-  const wUnits = 12 + 2 * GAP + 2 * PAD, hUnits = 8 + 2 * PAD;
+  const wUnits = W + 2 * GAP + 2 * PAD, hUnits = 8 + 2 * PAD;
   const cssW = cv.clientWidth || 800, dpr = Math.min(2, window.devicePixelRatio || 1);
   S = cssW / wUnits;
   cv.width = Math.round(cssW * dpr); cv.height = Math.round(hUnits * S * dpr);
@@ -204,17 +206,17 @@ const hue = a => (a * 137.508) % 360;
 
 function draw() {
   readTokens();
-  const wU = 12 + 2 * GAP;
+  const wU = W + 2 * GAP;
   ctx.clearRect(-PAD, -PAD, wU + 2 * PAD, 8 + 2 * PAD);
   // tăvi
-  for (const x0 of [0, 10]) {
-    ctx.fillStyle = tok['--tray']; rrect(vx(x0) - 0.12, -0.12, 2.24, 8.24, 0.22); ctx.fill();
-    for (let x = x0; x < x0 + 2; x++) for (let y = 0; y < 8; y++) {
+  for (const x0 of [0, W - TRAY_W]) {
+    ctx.fillStyle = tok['--tray']; rrect(vx(x0) - 0.12, -0.12, TRAY_W + 0.24, 8.24, 0.22); ctx.fill();
+    for (let x = x0; x < x0 + TRAY_W; x++) for (let y = 0; y < 8; y++) {
       ctx.fillStyle = tok['--tray-slot']; ctx.beginPath(); ctx.arc(vx(x + 0.5), y + 0.5, 0.34, 0, 7); ctx.fill();
     }
   }
   // tabla
-  const bx = vx(2.5) - 0.5;
+  const bx = vx(TRAY_W + 0.5) - 0.5;
   for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
     ctx.fillStyle = (r + f) % 2 ? tok['--sq-dark'] : tok['--sq-light'];
     ctx.fillRect(bx + f, r, 1.002, 1.002);
@@ -334,8 +336,8 @@ function drawPieceUp(ag, p, lifted) {
 
 // =================== playing the position ===================
 let game = null, flip = false;
-const sqToCell = sq => (sq >> 3) * W + 2 + (sq & 7);
-const sqX = sq => vx(2 + (sq & 7) + 0.5), sqY = sq => (sq >> 3) + 0.5;
+const sqToCell = sq => (sq >> 3) * W + TRAY_W + (sq & 7);
+const sqX = sq => vx(TRAY_W + (sq & 7) + 0.5), sqY = sq => (sq >> 3) + 0.5;
 function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); game = null; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
 function startGame(pz) {
   const m2 = pz.set === 'm2';
@@ -407,16 +409,19 @@ function refreshGame() {
   $('gMoves').innerHTML = g.history.map((h, i) => (i % 2 === 0 ? `<b>${(i >> 1) + 1}.</b> ` : '') + h).join(' ') || '&nbsp;';
 }
 function boardAgents() { const map = new Map(); cells.forEach((c, a) => map.set(c, a)); return map; }
-const isTrayCell = c => cx(c) < 2 || cx(c) >= 10;
+const isTrayCell = c => cx(c) < TRAY_W || cx(c) >= W - TRAY_W;
 const ALL_TRAY = Array.from({ length: N }, (_, c) => c).filter(isTrayCell);
 function freeTraySlot(type, nearCell) {
-  const occ = new Set(cells), own = TRAY_CELLS[type === type.toUpperCase() ? 'white' : 'black'];
-  const dist = c => Math.hypot(cx(c) - cx(nearCell), cy(c) - cy(nearCell));
-  // the back column of its own tray, then the front; a tray filled by hand can leave only the other one
-  for (const pool of [own.slice(0, 8), own.slice(8), ALL_TRAY]) {
-    const free = pool.filter(c => !occ.has(c));
+  const occ = new Set(cells), dist = c => Math.hypot(cx(c) - cx(nearCell), cy(c) - cy(nearCell));
+  // the tray on the side of the board where it was taken, or the tray of its colour
+  const left = $('optSide').checked ? cx(nearCell) < W / 2 : type === type.toUpperCase();
+  const cols = [...Array(TRAY_W).keys()], own = left ? cols : cols.map(i => W - 1 - i), other = left ? cols.map(i => W - 1 - i) : cols;
+  // the far column of that tray first, then towards the board; the other tray only if this one is full
+  for (const col of [...own, ...other]) {
+    const free = ALL_TRAY.filter(c => cx(c) === col && !occ.has(c));
     if (free.length) return free.reduce((b, c) => dist(c) < dist(b) ? c : b);
   }
+  return nearCell;
 }
 const inTray = (a, type) => agents[a].t === type && isTrayCell(cells[a]) && !(game && game.held && game.held.a === a);
 function trayHas(type) { return agents.some((ag, a) => inTray(a, type)); }
@@ -494,7 +499,7 @@ const mouse = { x: 0, y: 0 };
 function trackMouse(e) {
   const rect = cv.getBoundingClientRect();
   mouse.x = (e.clientX - rect.left) / S - PAD; mouse.y = (e.clientY - rect.top) / S - PAD;
-  if (flip) { mouse.x = 12 + 2 * GAP - mouse.x; mouse.y = 8 - mouse.y; }
+  if (flip) { mouse.x = W + 2 * GAP - mouse.x; mouse.y = 8 - mouse.y; }
 }
 window.addEventListener('pointermove', trackMouse);
 // the free tray cell nearest to a point; side: 0 = left tray, 1 = right tray, -1 = both
@@ -505,7 +510,7 @@ function dropCell(x, y, side) {
   const free = ALL_TRAY.filter(c => !occ.has(c) && (side < 0 || (side === 0) === (cx(c) < 2)));
   return free.length ? free.reduce((b, c) => dist(c) < dist(b) ? c : b) : null;
 }
-const traySide = x => x < vx(2.5) - 0.5 ? 0 : x > vx(2.5) + 7.5 ? 1 : -1;
+const traySide = x => x < vx(TRAY_W + 0.5) - 0.5 ? 0 : x > vx(TRAY_W + 0.5) + 7.5 ? 1 : -1;
 function dropHeld() {
   const g = game, side = traySide(mouse.x);
   if (side < 0) { flashHold('Drop it on a tray, left or right of the board.'); return; }
@@ -526,7 +531,7 @@ function releaseHeld() {
 }
 // the square under the pointer, or -1 outside the board
 function squareAtMouse() {
-  const f = Math.floor(mouse.x - 2 - GAP), r = Math.floor(mouse.y);
+  const f = Math.floor(mouse.x - TRAY_W - GAP), r = Math.floor(mouse.y);
   return f < 0 || f > 7 || r < 0 || r > 7 ? -1 : r * 8 + f;
 }
 const canMove = g => g && !anim && g.phase === 'user' && !g.held && CH.status(g.st) !== 'mate' && CH.status(g.st) !== 'stalemate';

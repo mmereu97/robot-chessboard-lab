@@ -1,5 +1,6 @@
 // ===== Motor de planificare: grilă 12x8 (2 coloane tavă + 8 tablă + 2 coloane tavă) =====
-const W = 12, H = 8, N = W * H, SQ2 = Math.SQRT2;
+// each tray is 4 columns of 8 places, so all the pieces fit on one of them
+const TRAY_W = 4, W = 8 + 2 * TRAY_W, H = 8, N = W * H, SQ2 = Math.SQRT2;
 const DIRS = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
 const cx = c => c % W, cy = c => (c / W) | 0;
 const cellXY = c => ({ x: cx(c) + 0.5, y: cy(c) + 0.5 });
@@ -73,8 +74,9 @@ function hungarian(a) {
 // Trays: white on the left, black on the right. No piece has a place of its own: each tray fills
 // its back column (away from the board) first, then its front column, with whatever comes.
 const TRAY_CELLS = {
-  white: [...Array(8).keys()].map(r => idx(0, r)).concat([...Array(8).keys()].map(r => idx(1, r))),
-  black: [...Array(8).keys()].map(r => idx(11, r)).concat([...Array(8).keys()].map(r => idx(10, r))),
+  // between positions the pieces not in play wait on the two columns next to the board: first the farther one
+  white: [...Array(8).keys()].map(r => idx(TRAY_W - 2, r)).concat([...Array(8).keys()].map(r => idx(TRAY_W - 1, r))),
+  black: [...Array(8).keys()].map(r => idx(W - TRAY_W + 1, r)).concat([...Array(8).keys()].map(r => idx(W - TRAY_W, r))),
 };
 const FULL_SET = 'KQRRBBNNPPPPPPPPkqrrbbnnpppppppp'.split('');
 
@@ -85,7 +87,7 @@ function parseFEN(fen) {
     let f = 0;
     for (const ch of row) {
       if (/\d/.test(ch)) f += +ch;
-      else { map.set(idx(2 + f, r), ch); f++; }
+      else { map.set(idx(TRAY_W + f, r), ch); f++; }
     }
   });
   return map;

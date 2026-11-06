@@ -65,6 +65,10 @@ Over the same 25 transitions (mean of three runs), pieces stepping aside with no
 
 Drag a piece to its square, as on chess.com or lichess, or click the piece and then the square. A dragged piece is put down by you, so no robot carries it; the robots only clear what is in the way: a captured piece when captures by hand are off, the rook when castling. Dropped on a square it cannot go to, it returns home.
 
+## Which tray
+
+A captured piece goes to the tray on its side of the board: files a to d to the left one, e to h to the right one. Untick the option and it goes to the tray of its colour, as between positions. Each tray has 4 columns of 8, so all the pieces fit on either; the far column fills first. If a tray is full, the piece goes to the other one.
+
 ## Captures by hand
 
 A person does not leave a captured piece to tidy itself away, so by default the app doesn't either. When you take a piece, it stays on your cursor while your own piece drives to the square. Nothing else can move until you drop it on a free place on either tray, wherever you like; in the mate-in-two puzzles the robot replies only after that. Its own captures still go to the tray by themselves. The option is under Movement rules.
