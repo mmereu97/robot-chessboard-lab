@@ -38,7 +38,7 @@ All five planners on the same chain of 25 changes of position (every position in
 - Every plan completed, and no two pieces came closer than their diameter. The fallbacks are visible in the app: the two sequential planners can finish with serialized PIBT when their heuristic loops.
 - The 12 mate-in-two puzzles were checked with the app's own solver: each has exactly one key move.
 
-Pieces step aside was added later and measured on the same chain with the same diameter: a mean of **4.0 s**, against 2.8 s for Fastest reset, with about 3 pieces per change stepping aside, by 0.07 of a square on average and 0.41 at most, and the circles never closer than their diameter. On 80 random changes at a diameter of 0.78 it could not place a trip 3 times; it then uses Fastest reset and the comparison table marks it as a fallback. Above a diameter of about 0.84 this happens more often, because a row has little room left to open.
+Pieces step aside was added later and measured on the same chain with the same diameter: a mean of **4.4 s**, against 2.7 s for Fastest reset, with about 3.6 pieces per change stepping aside, by 0.07 of a square on average and 0.41 at most, and the circles never closer than their diameter. On 80 random changes at a diameter of 0.78 it could not place a trip 3 times; it then uses Fastest reset and the comparison table marks it as a fallback. Above a diameter of about 0.84 this happens more often, because a row has little room left to open.
 
 Compute times are from one run in headless Chromium and will differ on your machine. The Fastest reset planner has a time budget and randomised orders, so its numbers vary slightly between runs.
 
@@ -67,11 +67,11 @@ Drag a piece to its square, as on chess.com or lichess, or click the piece and t
 
 ## The trays
 
-The trays have no fixed places. Each is wide enough for all 32 pieces in rows and columns at the chosen diameter, plus 10% of free room. A captured piece goes the shortest way to the nearest tray: along its rank to the tray's edge, stopping as soon as it is inside. The pieces already there move by the least that makes it fit, and stay where they were pushed. Dropped by hand, a piece lies where you put it, by the same rule. Untick the option and it goes to the tray of its colour instead.
+The trays have no fixed places. Each is wide enough for all 34 pieces (the 32 of a game and two spare queens) in rows and columns at the chosen diameter, plus 10% of free room. A captured piece goes the shortest way to the nearest tray: along its rank to the tray's edge, stopping as soon as it is inside. The pieces already there move by the least that makes it fit, and stay where they were pushed. Dropped by hand, a piece lies where you put it, by the same rule. Untick the option and it goes to the tray of its colour instead.
 
-Tested with all 32 pieces going one by one to the same tray, at diameters from 0.6 to 0.9: they never overlap. When a tray is nearly full, a piece may not find room this way (between 0 and 5 of the 32, more at the largest diameter), and then it goes to a grid place on the tray instead.
+Tested with 32 pieces going one by one to the same tray, at diameters from 0.6 to 0.9: they never overlap. When a tray is nearly full, a piece may not find room this way (between 0 and 5 of the 32, more at the largest diameter), and then it goes to a grid place on the tray instead.
 
-The planners work on a grid, so before the next position the pieces on the trays slide to places on it. Promotion needs no spare from a tray: the pawn's robot takes on the new piece.
+The planners work on a grid, so before the next position the pieces on the trays slide to places on it. A spare queen of each colour waits on the trays. When a pawn promotes, it goes off to the nearest tray and the queen comes by itself, in a straight line, with whatever is in the way stepping aside. A second promotion uses a queen captured earlier if there is one; otherwise the pawn's robot takes on the new piece.
 
 ## Captures by hand
 
@@ -85,7 +85,7 @@ Pieces are not tied to parking places: every plan starts from where the pieces r
 
 Set an Elo from 500 to 3000, pick a color and press Play Stockfish: the robots carry out both sides' moves on the board. The bot is the one from [chess-analysis-board](https://github.com/mmereu97/chess-analysis-board), copied with its calibration unchanged. Below Elo 1320 it plays and errs like a person: sound opening moves, moves played for an idea, instinctive checks, a rare blunder. From 1320 up it is Stockfish's own strength limit. Playing Black turns the board around. The engine loads only when you start a game.
 
-A pawn always promotes, to a queen.
+A pawn always promotes.
 
 ## Run
 

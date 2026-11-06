@@ -78,7 +78,8 @@ const TRAY_CELLS = {
   white: [...Array(8).keys()].map(r => idx(TRAY_W - 2, r)).concat([...Array(8).keys()].map(r => idx(TRAY_W - 1, r))),
   black: [...Array(8).keys()].map(r => idx(W - TRAY_W + 1, r)).concat([...Array(8).keys()].map(r => idx(W - TRAY_W, r))),
 };
-const FULL_SET = 'KQRRBBNNPPPPPPPPkqrrbbnnpppppppp'.split('');
+// the 32 pieces of a game and a spare queen of each colour, waiting on the trays for a promotion
+const FULL_SET = 'KQRRBBNNPPPPPPPPkqrrbbnnppppppppQq'.split('');
 
 function parseFEN(fen) {
   const map = new Map();

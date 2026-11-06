@@ -445,9 +445,15 @@ function playMove(m, byUser = false, dropped = false) {
       g.held = { a: victim, queued: null };
     } else removal = { victim, from, slot };
   }
-  if (m.promo) agents[mover].t = m.promo; // the pawn's robot takes on the new piece
+  // a promotion: the piece waiting on a tray comes by itself and the pawn goes off the board;
+  // with no such piece on the trays, the pawn's robot takes on the new piece
+  const spare = m.promo ? spareFor(m.promo, sqToCell(m.to)) : -1;
+  if (m.promo && spare < 0) agents[mover].t = m.promo;
   goals[mover] = sqToCell(m.to);
-  if (dropped) {
+  if (spare >= 0) {
+    if (dropped) g.placing = { a: mover, cell: goals[mover] };
+    goals[mover] = cells[mover];
+  } else if (dropped) {
     // Put there by hand, so no robot carries it. If the piece it took is still on that square, or the
     // rook has to pass it when castling, the planner sees it waiting at home until that is done;
     // it is drawn where it was dropped.
@@ -466,13 +472,56 @@ function playMove(m, byUser = false, dropped = false) {
     $('note').textContent = plan.note || ''; renderStats();
   }, 10);
   // the captured piece first goes straight to the nearest tray, then the move is played
-  const off = removal && removeToTray(removal.victim, removal.from, removal.slot);
-  if (off) runSettle(off, go); else go();
+  const steps = [];
+  if (removal) steps.push(() => removeToTray(removal.victim, removal.from, removal.slot));
+  if (spare >= 0) {
+    const to = sqToCell(m.to), from = dropped ? to : sqToCell(m.from);
+    steps.push(() => {
+      g.placing = null;
+      if (dropped) { cells = cells.slice(); cells[mover] = to; }
+      goals[mover] = freeTraySlot(m.piece, from);
+      return removeToTray(mover, from, goals[mover]);
+    });
+    steps.push(() => {
+      goals[spare] = to;
+      const plan = bringFromTray(spare, to);
+      if (!plan) { loose[spare] = null; }
+      return plan;
+    });
+  }
+  const next = i => {
+    if (i === steps.length) { go(); return; }
+    const plan = steps[i]();
+    if (plan) runSettle(plan, () => next(i + 1)); else next(i + 1);
+  };
+  next(0);
+}
+// of the pieces of this type lying on a tray, the one closest to the square
+function spareFor(type, toCell) {
+  const to = cellXY(toCell), held = game && game.held ? game.held.a : -1;
+  let best = -1, bd = Infinity;
+  agents.forEach((ag, a) => {
+    if (ag.t !== type || a === held || !isTrayCell(cells[a])) return;
+    const p = loose[a] || cellXY(cells[a]), d = Math.hypot(p.x - to.x, p.y - to.y);
+    if (d < bd) { bd = d; best = a; }
+  });
+  return best;
+}
+// a piece leaves the tray in a straight line for its square; whatever is in the way steps aside
+function bringFromTray(a, toCell) {
+  const from = loose[a] || cellXY(cells[a]), end = cellXY(toCell);
+  const L = Math.hypot(end.x - from.x, end.y - from.y), m = Math.max(2, Math.round(L / 0.05)), pts = [];
+  for (let i = 0; i <= m; i++) pts.push({ x: from.x + (end.x - from.x) * i / m, y: from.y + (end.y - from.y) * i / m });
+  const plan = roomPlan(a, pts);
+  if (!plan) return null;
+  loose[a] = null;
+  plan.goals[a] = toCell;
+  return plan;
 }
 // =================== the trays: no fixed places, pieces lie where they fit ===================
-// Wide enough for all 32 pieces in rows and columns at the chosen diameter, plus 10% of free room.
+// Wide enough for all the pieces in rows and columns at the chosen diameter, plus 10% of free room.
 function trayWidth() {
-  const D = diam(), rows = Math.floor(8 / D), cols = Math.ceil(32 / rows);
+  const D = diam(), rows = Math.floor(8 / D), cols = Math.ceil(agents.length / rows);
   return Math.min(TRAY_W, cols * D * 1.1);
 }
 function trayRect(left) {
