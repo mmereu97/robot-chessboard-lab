@@ -26,18 +26,7 @@ const KING_BASE_RULE = 0.78;   // the usual guideline: king's base = 78% of the 
 const theme = () => $('pieceTheme').value;
 try { const t = localStorage.getItem('robo-theme'); if (t) $('pieceTheme').value = t; else if (localStorage.getItem('robo-discs') === '1') $('pieceTheme').value = 'discs'; } catch (e) {}
 const insideBase = t => t === 'true' || t === 'ring';
-// how much of the circle the largest symbols fill, in percent with one decimal; 97% is the size they were drawn for
-const SYMBOL_BASE = 97;
-const symbolScale = () => (+$('symbolPct').value || SYMBOL_BASE) / SYMBOL_BASE;
-function setSymbol(v, save = true) {
-  const pct = Math.round(Math.max(50, Math.min(120, +v || SYMBOL_BASE)) * 10) / 10;
-  $('symbolPct').value = pct.toFixed(1); $('symbolRange').value = pct;
-  if (save) { try { localStorage.setItem('robo-symbol', pct.toFixed(1)); } catch (e) {} }
-}
-try { const v = localStorage.getItem('robo-symbol'); if (v) setSymbol(v, false); } catch (e) {}
-$('symbolRange').addEventListener('input', () => setSymbol($('symbolRange').value));
-$('symbolPct').addEventListener('change', () => setSymbol($('symbolPct').value));
-const showSymbol = () => { $('symbolBox').hidden = !insideBase(theme()); };
+const showSymbol = () => { $('sizesNote').hidden = insideBase(theme()); };
 function applyThemeDiameter() { if (insideBase(theme())) { $('diam').value = KING_BASE_RULE; $('diamVal').textContent = KING_BASE_RULE.toFixed(2) + ' of a square'; } }
 let lastTheme = theme();
 $('pieceTheme').addEventListener('change', () => {
@@ -47,13 +36,45 @@ $('pieceTheme').addEventListener('change', () => {
   showSymbol();
 });
 showSymbol();
-// inside the base: size of each image as a multiple of the circle's diameter, and the centre of the smallest
-// circle around the symbol, in fractions of the image. King and queen fill the circle; the others follow the
-// height order of a real set (king, queen, bishop, knight, rook, pawn).
+// inside the base: of each symbol, the diameter of the smallest circle around it and that circle's centre,
+// in fractions of the image. A percentage says how much of the base that circle fills, so 100% touches it.
 const INSIDE = {
-  K: { s: 1.21, cx: 0.489, cy: 0.516 }, Q: { s: 1.01, cx: 0.499, cy: 0.469 }, B: { s: 0.97, cx: 0.499, cy: 0.575 },
-  N: { s: 0.91, cx: 0.568, cy: 0.518 }, R: { s: 0.91, cx: 0.499, cy: 0.551 }, P: { s: 0.84, cx: 0.497, cy: 0.589 },
+  K: { enc: 0.801, cx: 0.489, cy: 0.516 }, Q: { enc: 0.961, cx: 0.499, cy: 0.469 }, B: { enc: 0.941, cx: 0.499, cy: 0.575 },
+  N: { enc: 0.919, cx: 0.568, cy: 0.518 }, R: { enc: 0.901, cx: 0.499, cy: 0.551 }, P: { enc: 0.814, cx: 0.497, cy: 0.589 },
 };
+const SIZE_DEFAULT = { K: 96.9, Q: 97.1, B: 91.3, N: 83.6, R: 82.0, P: 68.4 };
+const SIZE_NAME = { K: 'King', Q: 'Queen', B: 'Bishop', N: 'Knight', R: 'Rook', P: 'Pawn' };
+const sizes = { ...SIZE_DEFAULT };
+try { const v = JSON.parse(localStorage.getItem('robo-sizes')); if (v) for (const k in sizes) if (+v[k]) sizes[k] = +v[k]; } catch (e) {}
+function buildSizes() {
+  const box = $('sizesRows');
+  box.innerHTML = '';
+  for (const k of Object.keys(sizes)) {
+    const row = document.createElement('div'); row.className = 'size-row';
+    row.innerHTML = `<img alt="" src="${PIECE_SVG[k]}"><span>${SIZE_NAME[k]}</span><input type="range" min="30" max="130" step="0.1" aria-label="${SIZE_NAME[k]} size"><input type="number" min="30" max="130" step="0.1" aria-label="${SIZE_NAME[k]} size, percent"><i>%</i>`;
+    const range = row.querySelector('[type=range]'), num = row.querySelector('[type=number]');
+    const show = () => { range.value = sizes[k]; num.value = sizes[k].toFixed(1); };
+    const set = v => {
+      sizes[k] = Math.round(Math.max(30, Math.min(130, +v || SIZE_DEFAULT[k])) * 10) / 10;
+      show();
+      try { localStorage.setItem('robo-sizes', JSON.stringify(sizes)); } catch (e) {}
+    };
+    range.addEventListener('input', () => set(range.value));
+    num.addEventListener('input', () => { const v = +num.value; if (v >= 30 && v <= 130) sizes[k] = Math.round(v * 10) / 10; });   // live, while typing
+    num.addEventListener('change', () => set(num.value));
+    show(); box.appendChild(row);
+  }
+}
+buildSizes();
+$('sizesReset').addEventListener('click', () => { Object.assign(sizes, SIZE_DEFAULT); try { localStorage.removeItem('robo-sizes'); } catch (e) {} buildSizes(); });
+function showTab(name) {
+  $('panelMain').hidden = name !== 'main'; $('panelSizes').hidden = name !== 'sizes';
+  $('tabMain').classList.toggle('on', name === 'main'); $('tabSizes').classList.toggle('on', name === 'sizes');
+  try { localStorage.setItem('robo-tab', name); } catch (e) {}
+}
+$('tabMain').addEventListener('click', () => showTab('main'));
+$('tabSizes').addEventListener('click', () => showTab('sizes'));
+try { if (localStorage.getItem('robo-tab') === 'sizes') showTab('sizes'); } catch (e) {}
 
 // --- control UI ---
 const sel = $('pzSel');
@@ -388,7 +409,7 @@ function drawPieceUp(ag, p, lifted) {
   const x = p.screen ? p.x : vx(p.x), y = p.y;
   const img = PIECE_IMG[ag.t];
   if (insideBase(theme()) && img && img.complete && img.naturalWidth) {
-    const D = diam(), f = INSIDE[ag.t.toUpperCase()], size = D * f.s * symbolScale();
+    const D = diam(), T = ag.t.toUpperCase(), f = INSIDE[T], size = D * sizes[T] / 100 / f.enc;
     ctx.save();
     if (theme() === 'ring') { ctx.strokeStyle = tok['--muted']; ctx.globalAlpha = 0.55; ctx.lineWidth = 0.015; ctx.beginPath(); ctx.arc(x, y, D / 2, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
     if (lifted) { ctx.shadowColor = tok['--shadow']; ctx.shadowBlur = 0.12 * S; ctx.shadowOffsetY = 0.04 * S; }

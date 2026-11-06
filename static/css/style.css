@@ -112,3 +112,12 @@ canvas.clickable { cursor: pointer; }
 canvas.holding { cursor: grabbing; }
 #cv.clickable { touch-action: none; }
 #cv.dragging { cursor: grabbing; }
+.side-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.side-tab { appearance: none; border: 0; background: none; cursor: pointer; font: 600 13.5px var(--f-body); color: var(--muted); padding: 8px 12px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.side-tab.on { color: var(--ink); border-bottom-color: var(--accent); }
+.panel-main { display: grid; gap: inherit; min-width: 0; }
+.panel-main[hidden], .panel-sizes[hidden] { display: none; }
+.size-row { display: grid; grid-template-columns: 30px 50px minmax(0, 1fr) 72px 12px; align-items: center; gap: 8px; padding: 5px 0; font-size: 13px; }
+.size-row img { width: 30px; height: 30px; }
+.size-row input[type=number] { width: 100%; padding: 6px; }
+.size-row i { font-style: normal; color: var(--muted); }

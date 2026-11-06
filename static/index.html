@@ -46,6 +46,17 @@
     </div>
 
     <aside>
+      <div class="side-tabs" role="tablist">
+        <button class="side-tab on" id="tabMain" type="button">Controls</button>
+        <button class="side-tab" id="tabSizes" type="button">Piece sizes</button>
+      </div>
+      <div class="panel-sizes" id="panelSizes" hidden>
+        <p class="sub" style="margin:0 0 12px;font-size:13px">How much of its circle each symbol fills. At 100% it touches the circle. The board shows every change at once.</p>
+        <p class="sub" id="sizesNote" style="margin:0 0 12px;font-size:13px;color:var(--warn)" hidden>These sizes apply to the two “inside the base” themes. Choose one under Controls to see them.</p>
+        <div id="sizesRows"></div>
+        <button class="btn" id="sizesReset" type="button" style="width:100%;margin-top:12px">Back to the default sizes</button>
+      </div>
+      <div class="panel-main" id="panelMain">
       <button class="go" id="goBtn" type="button">Random puzzle <small id="queueTag">→</small></button>
       <button class="btn" id="resetBtn" type="button">Reset board to starting position</button>
       <div>
@@ -93,14 +104,6 @@
           <option value="true">Lichess, inside the base</option>
           <option value="ring" selected>Lichess, inside the base, with circle</option>
         </select>
-        <div id="symbolBox">
-          <p class="lbl" style="margin-top:14px">Symbol size in the circle</p>
-          <div class="row" style="align-items:center">
-            <input type="range" id="symbolRange" min="50" max="120" step="0.1" value="97" aria-label="Symbol size, percent of the circle">
-            <input type="number" id="symbolPct" min="50" max="120" step="0.1" value="97.0" aria-label="Symbol size, percent of the circle">
-            <span>%</span>
-          </div>
-        </div>
         <p class="lbl" style="margin-top:14px">Piece diameter</p>
         <input type="range" id="diam" min="0.6" max="0.9" step="0.02" value="0.76" aria-label="Piece diameter">
         <div class="speed"><span>slim</span><span id="diamVal">0.76 of a square</span><span>wide</span></div>
@@ -113,6 +116,7 @@
       <div class="row">
         <button class="btn" id="replayBtn" type="button" disabled>Replay</button>
         <button class="btn" id="cmpBtn" type="button" disabled>Compare planners</button>
+      </div>
       </div>
     </aside>
   </div>
