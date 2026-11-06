@@ -68,7 +68,7 @@ function buildSizes() {
 buildSizes();
 $('sizesReset').addEventListener('click', () => { Object.assign(sizes, SIZE_DEFAULT); try { localStorage.removeItem('robo-sizes'); } catch (e) {} buildSizes(); });
 // the space between circle and symbol: transparent, or an opaque colour for each side
-const FILL_DEFAULT = { w: { on: false, color: '#d4af37' }, b: { on: false, color: '#8a8a8a' } };
+const FILL_DEFAULT = { w: { on: true, color: '#d4af37' }, b: { on: true, color: '#8a8a8a' } };
 const fill = { w: { ...FILL_DEFAULT.w }, b: { ...FILL_DEFAULT.b } };
 try { const v = JSON.parse(localStorage.getItem('robo-fill')); if (v) for (const k of ['w', 'b']) Object.assign(fill[k], v[k]); } catch (e) {}
 for (const k of ['w', 'b']) {
@@ -840,5 +840,5 @@ applyThemeDiameter();
 resize();
 document.fonts && document.fonts.ready.then(() => draw());
 requestAnimationFrame(frame);
-// demonstrație: prima tranziție pornește singură
-setTimeout(() => { if (!anim && !last) request('p1'); }, 900);
+// on opening: a game against Stockfish
+setTimeout(() => { if (!anim && !last) request('bot'); }, 300);
