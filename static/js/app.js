@@ -104,9 +104,13 @@ const algosEl = $('algos');
   algosEl.appendChild(l);
 });
 algosEl.addEventListener('change', e => { algo = e.target.value; try { localStorage.setItem('robo-algo2', algo); } catch (er) {} });
-const diam = () => +$('diam').value;
+// The slider is the piece as drawn. Like magnets that repel, pieces keep 3 mm apart (on a 58 mm square):
+// to everything that plans or places them, a piece is that much wider than it looks.
+const PIECE_GAP = 3 / 58;
+const pieceBase = () => +$('diam').value;
+const diam = () => pieceBase() + PIECE_GAP;
 const opt = () => ({ diag: $('optDiag').checked, turn: $('optTurn').checked, smooth: $('optSmooth').checked, diam: diam(), budget: 1000 });
-$('diam').addEventListener('input', () => { $('diamVal').textContent = diam().toFixed(2) + ' of a square'; });
+$('diam').addEventListener('input', () => { $('diamVal').textContent = pieceBase().toFixed(2) + ' of a square'; });
 const speed = () => +$('speed').value;
 $('speed').addEventListener('input', () => { $('speedVal').textContent = speed() + ' squares/s'; if (lastCmp) renderCmp(lastCmp); renderStats(); });
 
@@ -403,20 +407,21 @@ function draw() {
   const held = game && game.held;
   if (held && held.queued !== null) P[held.a] = held.queued;
   if (game && game.placing) P[game.placing.a] = cellXY(game.placing.cell);
-  const dragged = drag && drag.moved ? drag.a : -1;
+  if (game && game.trayQueue) P[game.trayQueue.a] = game.trayQueue.pt;
+  const dragged = drag && drag.moved ? drag.a : -1, inHand = review ? -1 : handPiece();
   glideOver(P, review);
   drawGameMarks();
   for (const a of order) {
     if (review) drawPiece({ ...agents[a], t: review.types[a] }, P[a], 0);
-    else if (a !== dragged && (!held || held.queued !== null || a !== held.a)) drawPiece(agents[a], P[a], moving[a]);
+    else if (a !== dragged && a !== inHand) drawPiece(agents[a], P[a], moving[a]);
   }
   drawGameDots();
   if (dragged >= 0) drawPiece(agents[dragged], { x: mouse.x, y: mouse.y, screen: true }, 1);
-  if (held && held.queued === null && !review) {
+  if (inHand >= 0) {
     // where it would land, then the piece itself on the cursor
     const side = traySide(mouse.x), c = side < 0 ? null : dropPoint(mouse.x, mouse.y, side);
-    if (c !== null) { ctx.strokeStyle = tok['--accent']; ctx.lineWidth = 0.05; ctx.setLineDash([0.1, 0.07]); ctx.beginPath(); ctx.arc(vx(c.x), c.y, diam() / 2, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
-    drawPiece(agents[held.a], { x: mouse.x, y: mouse.y, screen: true }, 1);
+    if (c !== null) { ctx.strokeStyle = tok['--accent']; ctx.lineWidth = 0.05; ctx.setLineDash([0.1, 0.07]); ctx.beginPath(); ctx.arc(vx(c.x), c.y, pieceBase() / 2, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
+    drawPiece(agents[inHand], { x: mouse.x, y: mouse.y, screen: true }, 1);
   }
   if (flip) ctx.restore();
 }
@@ -436,7 +441,7 @@ function drawPieceUp(ag, p, lifted) {
   const x = p.screen ? p.x : vx(p.x), y = p.y;
   const img = PIECE_IMG[ag.t];
   if (insideBase(theme()) && img && img.complete && img.naturalWidth) {
-    const D = diam(), T = ag.t.toUpperCase(), f = INSIDE[T], size = D * sizes[T] / 100 / f.enc;
+    const D = pieceBase(), T = ag.t.toUpperCase(), f = INSIDE[T], size = D * sizes[T] / 100 / f.enc;
     ctx.save();
     const inside = fill[ag.white ? 'w' : 'b'];
     if (inside.on) { ctx.fillStyle = inside.color; ctx.beginPath(); ctx.arc(x, y, D / 2, 0, 7); ctx.fill(); }
@@ -473,7 +478,7 @@ let game = null, flip = false;
 const loose = new Array(agents.length).fill(null);
 const sqToCell = sq => (sq >> 3) * W + TRAY_W + (sq & 7);
 const sqX = sq => vx(TRAY_W + (sq & 7) + 0.5), sqY = sq => (sq >> 3) + 0.5;
-function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); game = null; glide = null; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
+function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); game = null; glide = null; trayHand = null; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
 function startGame(pz) {
   const m2 = pz.set === 'm2';
   game = { pz, st: CH.fromFEN(pz.fen, true), m2, history: [], sel: -1, last: null, phase: 'user', userMoves: 0, hint: -1, result: '', view: null };
@@ -489,7 +494,7 @@ function startGame(pz) {
 // =================== playing Stockfish ===================
 // The bot and its 7 MB engine live in static/bot/ and load only when someone wants to play.
 function botPuzzle() {
-  const elo = Math.max(500, Math.min(3000, Math.round(+$('botElo').value) || 800)), c = $('botColor').value;
+  const elo = Math.max(100, Math.min(3000, Math.round(+$('botElo').value) || 800)), c = $('botColor').value;
   const human = c === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : c;
   $('botElo').value = elo;
   return { name: 'Playing Stockfish', desc: `Elo ${elo}. You play ${human === 'w' ? 'White' : 'Black'}.`, fen: PUZZLES[0].fen, bot: { elo, human } };
@@ -558,6 +563,7 @@ function viewPly(g, ply) {
   if (ply === viewedPly(g)) return;
   if (shownPos) glide = { from: shownPos, t0: performance.now() };
   if (drag) { drag = null; skipClick = true; cv.classList.remove('dragging'); }
+  if (trayHand) { trayHand = null; skipClick = true; cv.classList.remove('dragging'); }
   g.view = ply === g.history.length ? null : ply;
   g.sel = -1;
   refreshGame();
@@ -588,6 +594,7 @@ function refreshGame() {
   else if (g.result === 'lose') { text = g.loseMsg || 'Not mate in two.'; cls = 'lose'; }
   else if (st === 'mate') { text = 'Checkmate. ' + (g.st.white ? 'Black' : 'White') + ' wins.'; cls = 'win'; }
   else if (st === 'stalemate') { text = 'Stalemate.'; }
+  else if (trayHand && trayHand.moved) text = `Put the ${PIECE_NAME[agents[trayHand.a].t.toLowerCase()]} down on either tray.`;
   else if (g.held && g.held.queued === null) text = `Take the ${PIECE_NAME[agents[g.held.a].t.toLowerCase()]} off the board: click a free place on a tray.`;
   else if (g.phase === 'loading') text = 'Starting Stockfish…';
   else if (g.phase === 'robot') text = g.bot ? 'Stockfish is thinking…' : 'Black is thinking…';
@@ -621,6 +628,7 @@ function freeTraySlot(type, nearCell) {
 }
 // physical move: which robot goes where (capture to tray, rook in castling, promotion swap with a tray piece)
 function playMove(m, byUser = false, dropped = false) {
+  if (anim) { game.deferred = [m, byUser, dropped]; return; }   // the pieces on a tray are still making room
   const g = game, map = boardAgents(), goals = cells.slice();
   const mover = map.get(sqToCell(m.from));
   let removal = null;
@@ -688,9 +696,10 @@ function playMove(m, byUser = false, dropped = false) {
 // of the pieces of this type lying on a tray, the one closest to the square
 function spareFor(type, toCell) {
   const to = cellXY(toCell), held = game && game.held ? game.held.a : -1;
+  const inHand = trayHand ? trayHand.a : game && game.trayQueue ? game.trayQueue.a : -1;
   let best = -1, bd = Infinity;
   agents.forEach((ag, a) => {
-    if (ag.t !== type || a === held || !isTrayCell(cells[a])) return;
+    if (ag.t !== type || a === held || a === inHand || !isTrayCell(cells[a])) return;
     const p = loose[a] || cellXY(cells[a]), d = Math.hypot(p.x - to.x, p.y - to.y);
     if (d < bd) { bd = d; best = a; }
   });
@@ -763,6 +772,7 @@ function afterMove() {
     finishDrop(g, g.held.queued, afterMove);
     return;
   }
+  if (g.trayQueue) { const q = g.trayQueue; g.trayQueue = null; layOnTray(q.a, q.pt, afterMove); return; }
   const st = CH.status(g.st);
   if (g.bot) { g.frames[g.history.length] = snapshot(g); botNext(g); return; }
   if (!g.m2) { g.phase = 'user'; refreshGame(); return; }
@@ -807,13 +817,51 @@ function dropHeld() {
 }
 // it lies where it was dropped; the pieces there move by the least that makes it fit
 function finishDrop(g, pt, then) {
-  const a = g.held.a, left = pt.x < W / 2;
+  const a = g.held.a;
+  g.held = null;
+  cv.classList.remove('holding');
+  layOnTray(a, pt, then);
+}
+function layOnTray(a, pt, then) {
+  const left = pt.x < W / 2;
   if ((cx(cells[a]) < TRAY_W) !== left) { const c = freeTraySlotOn(left, cellXY(cells[a])); if (c >= 0) { cells = cells.slice(); cells[a] = c; } }
   let plan = null, at = pt;
   for (const q of [pt, ...spotsNear(a, pt, left)]) { plan = roomPlan(a, [q, { ...q }], true); if (plan) { at = q; break; } }
-  loose[a] = at; g.held = null;
-  cv.classList.remove('holding');
+  loose[a] = at;
   if (plan && plan.stayed.length) { plan.segs = plan.segs.filter(x => x.a !== a); runSettle(plan, then); } else then();
+}
+// =================== free hands on the trays, at any moment of a game ===================
+// Press and drag, or click a piece and click where it goes. It counts as lying where it was until it is
+// put down; while the robots are moving it waits on its new spot for them to finish.
+let trayHand = null;
+const handPiece = () => {
+  const g = game; if (!g) return -1;
+  if (trayHand && trayHand.moved) return trayHand.a;
+  return g.held && g.held.queued === null ? g.held.a : -1;
+};
+function trayPieceAt(x, y) {
+  let best = -1, bd = pieceBase() / 2;
+  agents.forEach((_, a) => {
+    if (!isTrayCell(cells[a]) || (game.held && game.held.a === a) || (anim && anim.by[a].length)) return;
+    const p = loose[a] || cellXY(cells[a]), d = Math.hypot(vx(p.x) - x, p.y - y);
+    if (d < bd) { bd = d; best = a; }
+  });
+  return best;
+}
+function dropTrayHand(g) {
+  const a = trayHand.a, side = traySide(mouse.x);
+  trayHand = null; cv.classList.remove('dragging');
+  if (side >= 0) putOnTray(g, a, dropPoint(mouse.x, mouse.y, side));   // anywhere else: it goes back where it lay
+  refreshGame();
+}
+function putOnTray(g, a, pt) {
+  if (anim || g.phase === 'moving' || g.phase === 'hold') { g.trayQueue = { a, pt }; return; }
+  layOnTray(a, pt, () => traySettled(g));
+}
+function traySettled(g) {
+  if (game !== g) return;
+  if (g.trayQueue) { const q = g.trayQueue; g.trayQueue = null; layOnTray(q.a, q.pt, () => traySettled(g)); return; }
+  if (g.deferred) { const d = g.deferred; g.deferred = null; playMove(...d); }
 }
 function flashHold(text) { $('gStatus').textContent = text; }
 // leaving the position while still holding a piece: it goes to the nearest free tray cell
@@ -835,14 +883,26 @@ cv.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
   trackMouse(e);
   const g = game, sq = squareAtMouse();
+  if (g && trayHand) { trayHand.dropping = true; skipClick = true; return; }   // a piece picked up with a click
+  if (g && g.view === null && !g.trayQueue && !(g.held && g.held.queued === null)) {
+    const a = trayPieceAt(mouse.x, mouse.y);
+    if (a >= 0) { trayHand = { a, x: mouse.x, y: mouse.y, moved: false }; skipClick = true; return; }
+  }
   if (!canMove(g) || sq < 0 || !legalFrom(sq).length) return;
   drag = { sq, a: boardAgents().get(sqToCell(sq)), x: mouse.x, y: mouse.y, moved: false };
 });
 window.addEventListener('pointermove', () => {
+  if (trayHand && !trayHand.moved && Math.hypot(mouse.x - trayHand.x, mouse.y - trayHand.y) >= DRAG_START) { trayHand.moved = trayHand.dragged = true; cv.classList.add('dragging'); refreshGame(); }
   if (!drag || drag.moved || Math.hypot(mouse.x - drag.x, mouse.y - drag.y) < DRAG_START) return;
   drag.moved = true; game.sel = drag.sq; game.hint = -1; cv.classList.add('dragging');
 });
 window.addEventListener('pointerup', e => {
+  if (trayHand) {
+    trackMouse(e);
+    if (trayHand.dragged || trayHand.dropping) dropTrayHand(game);
+    else { trayHand.moved = true; cv.classList.add('dragging'); refreshGame(); }   // only clicked: it stays on the cursor
+    return;
+  }
   const d = drag; drag = null; cv.classList.remove('dragging');
   if (!d || !d.moved) return;
   trackMouse(e);
@@ -851,7 +911,8 @@ window.addEventListener('pointerup', e => {
   const ms = canMove(g) && to !== d.sq ? legalFrom(d.sq).filter(m => m.to === to) : [];
   if (ms.length) playMove(ms.length > 1 ? pickPromo(ms) : ms[0], true, true);
 });
-window.addEventListener('pointercancel', () => { drag = null; cv.classList.remove('dragging'); });
+window.addEventListener('pointercancel', () => { drag = null; trayHand = null; cv.classList.remove('dragging'); });
+window.addEventListener('keydown', e => { if (e.code === 'Escape' && trayHand) { trayHand = null; cv.classList.remove('dragging'); refreshGame(); } });
 cv.addEventListener('click', e => {
   const g = game;
   if (skipClick) { skipClick = false; return; }

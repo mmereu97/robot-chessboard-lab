@@ -73,6 +73,10 @@ Tested with 32 pieces going one by one to the same tray, at diameters from 0.6 t
 
 Between positions too, the pieces not in play lie in a heap, at random and without touching. The planners work on a grid, but a piece that stays on a tray stays where it lies, one that leaves starts from where it lies, and one that arrives ends its trip in the heap. The planners do not see the heap, so during a change of position two pieces can pass closer than their diameter, mostly on the trays; the clearance in the statistics shows it in red when that happens. Captures and promotions during a game are planned around the real positions and do not touch. A spare queen of each colour waits on the trays. When a pawn promotes, it goes off to the nearest tray and the queen comes by itself, in a straight line, with whatever is in the way stepping aside. A second promotion uses a queen captured earlier if there is one; otherwise the pawn's robot takes on the new piece.
 
+You can reach into the trays at any moment of a game, on your turn or not: drag a piece, or click it and click where it goes, on the same tray or the other one. The pieces there make room. Drop it anywhere else, or press Esc, and it goes back where it lay. While the robots are moving, it waits on its new spot until they finish.
+
+Pieces keep 3 mm apart, as magnets that repel would, taken on a 58 mm square (0.05 of a square). To everything that plans or places pieces, a piece is that much wider than it is drawn. On the chain of 25 changes of position this cost no measurable time: Fastest reset stays at 2.7 s and Pieces step aside at 4.5 s. A tray of 32 pieces still holds them all, none closer than that distance.
+
 ## Captures by hand
 
 A person does not leave a captured piece to tidy itself away, so by default the app doesn't either. When you take a piece, it stays on your cursor while your own piece drives to the square. Nothing else can move until you drop it on a free place on either tray, wherever you like; in the mate-in-two puzzles the robot replies only after that. Its own captures still go to the tray by themselves. The option is under Movement rules.
@@ -83,7 +87,9 @@ Pieces are not tied to parking places: every plan starts from where the pieces r
 
 ## Play Stockfish
 
-Set an Elo from 500 to 3000, pick a color and press Play Stockfish: the robots carry out both sides' moves on the board. The bot is the one from [chess-analysis-board](https://github.com/mmereu97/chess-analysis-board), copied with its calibration. Below Elo 1320 it plays and errs like a person: sound opening moves, moves played for an idea, instinctive checks, a rare blunder. An option, off by default, makes it stop making mistakes once it is a rook or more down; its Elo was calibrated with that rule on, so without it the bot is a little weaker when behind. From 1320 up it is Stockfish's own strength limit. Playing Black turns the board around. The page always opens on such a game, with you as White against Elo 800; the engine starts with Stockfish's first move.
+Set an Elo from 100 to 3000, pick a color and press Play Stockfish: the robots carry out both sides' moves on the board. The bot is the one from [chess-analysis-board](https://github.com/mmereu97/chess-analysis-board), copied with its calibration. Below Elo 1320 it plays and errs like a person: sound opening moves, moves played for an idea, instinctive checks, a rare blunder. An option, off by default, makes it stop making mistakes once it is a rook or more down; its Elo was calibrated with that rule on, so without it the bot is a little weaker when behind. From 1320 up it is Stockfish's own strength limit. Playing Black turns the board around. The page always opens on such a game, with you as White against Elo 800; the engine starts with Stockfish's first move.
+
+Below Elo 500 the brain cannot get any weaker, so part of its moves are chosen at random: from none at 500 to 80% at 100, for a child's first games. These levels are a slope, not a measurement. Against level 500, level 100 lost all of 14 games and level 300 lost 13 and drew one, so they are weaker, but their numbers are not calibrated Elo as the levels from about 540 up are.
 
 A pawn always promotes.
 

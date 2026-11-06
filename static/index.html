@@ -6,7 +6,7 @@
 <title>Robot Chessboard Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="css/style.css?v=20261106e">
+<link rel="stylesheet" href="css/style.css?v=20261106f">
 </head>
 <body>
 <div class="wrap">
@@ -73,7 +73,7 @@
       <div>
         <p class="lbl">Play Stockfish</p>
         <div class="row">
-          <input type="number" id="botElo" min="500" max="3000" step="50" value="800" aria-label="Stockfish Elo" title="Elo, 500 to 3000">
+          <input type="number" id="botElo" min="100" max="3000" step="50" value="800" aria-label="Stockfish Elo" title="Elo, 100 to 3000">
           <select id="botColor" aria-label="Your color">
             <option value="w">You play White</option>
             <option value="b">You play Black</option>
@@ -81,7 +81,7 @@
           </select>
         </div>
         <button class="btn" id="botBtn" type="button" style="width:100%;margin-top:8px">Play Stockfish</button>
-        <p class="sub" style="margin:8px 0 0;font-size:12.5px">Below Elo 1320 it plays and errs like a person.</p>
+        <p class="sub" style="margin:8px 0 0;font-size:12.5px">Below Elo 1320 it plays and errs like a person. Below 500 some of its moves are pure chance: for a child's first games.</p>
         <label style="display:block;margin-top:8px;font-size:13px"><input type="checkbox" id="botFight"> A rook or more down, it stops making mistakes</label>
       </div>
       <div>
@@ -157,10 +157,10 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=20261106e"></script>
-<script src="js/puzzles.js?v=20261106e"></script>
-<script src="js/chess.js?v=20261106e"></script>
-<script src="js/pieces.js?v=20261106e"></script>
-<script src="js/app.js?v=20261106e"></script>
+<script src="js/engine.js?v=20261106f"></script>
+<script src="js/puzzles.js?v=20261106f"></script>
+<script src="js/chess.js?v=20261106f"></script>
+<script src="js/pieces.js?v=20261106f"></script>
+<script src="js/app.js?v=20261106f"></script>
 </body>
 </html>

@@ -294,6 +294,7 @@ function botFinish(cfg, ctx, lines2, rnd = Math.random){
 /* ---------- end of bot brain ---------- */
 
 /* ---------- driver: talks to the engine, plays the brain's choice ---------- */
+const CHANCE_FROM = 500, CHANCE_AT_100 = 0.8;
 let w = null, job = null;
 function engine(){
   if (w) return w;
@@ -346,6 +347,17 @@ export function newGame(startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR 
       return null;
     },
     think(elo, fightBack, onMove, onError){
+      // Under Elo 500 the brain cannot go lower, so some moves are left to chance: none at 500, CHANCE_AT_100 at 100.
+      // A chance move can hang the queen or miss a mate. The levels are relative: only 541 and up was measured against an anchor.
+      if (elo < CHANCE_FROM){
+        fightBack = false;
+        if (Math.random() < CHANCE_AT_100 * (CHANCE_FROM - elo) / (CHANCE_FROM - 100)){
+          const L = c.moves({verbose:true}).filter(m => !m.promotion || m.promotion === "q"), m = L[Math.floor(Math.random() * L.length)];
+          const P = current = {};
+          setTimeout(() => { if (!P.dead) onMove(m.lan); }, 400);
+          return;
+        }
+      }
       const fen = c.fen(), cfg = {style:"human", elo:eloToInternal(elo), disp:elo, fightBack};
       const pos = moves.length ? `position fen ${startFen} moves ${moves.map(m => m.lan).join(" ")}` : "position fen " + fen;
       const P = current = job = {fen, cfg, pos, lines:{}, t0:performance.now(), last:moves[moves.length - 1] || null, stage:"main", ctx:null, official:elo >= LIMIT_MIN, depth:1, onMove, onError};
