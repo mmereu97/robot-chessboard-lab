@@ -249,7 +249,11 @@ $('replayBtn').addEventListener('click', () => { if (!last || anim) return; carP
 document.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName;
   if (/INPUT|SELECT|TEXTAREA/.test(tag)) return;
-  if (game && game.bot) return;   // a stray key must not end a game against Stockfish
+  if (game && game.bot) {   // a stray key must not end a game against Stockfish; the arrows look through its moves
+    const to = { ArrowLeft: viewedPly(game) - 1, ArrowRight: viewedPly(game) + 1, ArrowUp: 0, Home: 0, ArrowDown: game.history.length, End: game.history.length }[e.code];
+    if (to !== undefined) { e.preventDefault(); viewPly(game, to); }
+    return;
+  }
   if (e.code === 'Space') { if (tag === 'BUTTON') return; e.preventDefault(); request(randomKey()); }
   if (e.code === 'KeyR') { e.preventDefault(); request('p0'); }
   if (e.code === 'ArrowRight') { e.preventDefault(); request(stepKey(1)); }
@@ -355,6 +359,7 @@ function draw() {
 
   const P = [], moving = new Uint8Array(agents.length);
   const t = anim ? anim.t : 0;
+  const review = game && game.view !== null ? game.frames[game.view] : null;
   for (let a = 0; a < agents.length; a++) {
     if (anim) {
       const p = anim.by[a].length ? agentPos(anim.by, a, anim.plan.starts[a], t) : (loose[a] || cellXY(anim.plan.starts[a]));
@@ -362,7 +367,7 @@ function draw() {
       const l = anim.by[a]; for (const s of l) if (t > s.t0 && t < s.t1) moving[a] = 1;
     } else P.push(loose[a] || cellXY(cells[a]));
   }
-  if (anim) {
+  if (anim && !review) {
     // trasee
     if ($('optTrails').checked) {
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -391,7 +396,7 @@ function draw() {
       if (!cp) cp = anim.plan.car.length ? anim.plan.car[0].from || anim.plan.car[0].seg.pts[0] : carPos;
       drawMagnet(cp);
     }
-  } else if ($('optCar').checked && (algo === 'naive' || algo === 'seq')) drawMagnet(carPos);
+  } else if (!anim && !review && $('optCar').checked && (algo === 'naive' || algo === 'seq')) drawMagnet(carPos);
 
   // piese: întâi cele în repaus, apoi cele care se mișcă
   const order = [...agents.keys()].sort((x, y) => moving[x] - moving[y]);
@@ -399,11 +404,15 @@ function draw() {
   if (held && held.queued !== null) P[held.a] = held.queued;
   if (game && game.placing) P[game.placing.a] = cellXY(game.placing.cell);
   const dragged = drag && drag.moved ? drag.a : -1;
+  glideOver(P, review);
   drawGameMarks();
-  for (const a of order) if (a !== dragged && (!held || held.queued !== null || a !== held.a)) drawPiece(agents[a], P[a], moving[a]);
+  for (const a of order) {
+    if (review) drawPiece({ ...agents[a], t: review.types[a] }, P[a], 0);
+    else if (a !== dragged && (!held || held.queued !== null || a !== held.a)) drawPiece(agents[a], P[a], moving[a]);
+  }
   drawGameDots();
   if (dragged >= 0) drawPiece(agents[dragged], { x: mouse.x, y: mouse.y, screen: true }, 1);
-  if (held && held.queued === null) {
+  if (held && held.queued === null && !review) {
     // where it would land, then the piece itself on the cursor
     const side = traySide(mouse.x), c = side < 0 ? null : dropPoint(mouse.x, mouse.y, side);
     if (c !== null) { ctx.strokeStyle = tok['--accent']; ctx.lineWidth = 0.05; ctx.setLineDash([0.1, 0.07]); ctx.beginPath(); ctx.arc(vx(c.x), c.y, diam() / 2, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
@@ -464,15 +473,16 @@ let game = null, flip = false;
 const loose = new Array(agents.length).fill(null);
 const sqToCell = sq => (sq >> 3) * W + TRAY_W + (sq & 7);
 const sqX = sq => vx(TRAY_W + (sq & 7) + 0.5), sqY = sq => (sq >> 3) + 0.5;
-function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); game = null; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
+function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); game = null; glide = null; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
 function startGame(pz) {
   const m2 = pz.set === 'm2';
-  game = { pz, st: CH.fromFEN(pz.fen, true), m2, history: [], sel: -1, last: null, phase: 'user', userMoves: 0, hint: -1, result: '' };
+  game = { pz, st: CH.fromFEN(pz.fen, true), m2, history: [], sel: -1, last: null, phase: 'user', userMoves: 0, hint: -1, result: '', view: null };
   if (m2) game.keys = CH.mateIn2Keys(game.st);
   $('game').hidden = false; cv.classList.add('clickable');
   $('gMode').textContent = m2 ? 'White to move · mate in two · the robot defends' : 'Free play · you move both sides';
   $('gHint').hidden = $('gSolution').hidden = !m2;
   $('gRestart').textContent = pz.bot ? 'New game' : 'Restart position';
+  $('gNav').hidden = !pz.bot;
   if (pz.bot) startBotGame(pz.bot);
   refreshGame();
 }
@@ -489,36 +499,91 @@ function startBotGame(bot) {
   const g = game;
   g.bot = { ...bot, brain: null };
   g.phase = 'loading';
+  g.frames = [snapshot(g)];
   $('gMode').textContent = `You play ${bot.human === 'w' ? 'White' : 'Black'} · Stockfish at Elo ${bot.elo}`;
   import('../bot/bot.js').then(mod => {
-    if (game !== g) return;
+    if (game !== g || g.phase === 'done') return;
     g.bot.brain = mod.newGame();
     botNext(g);
   }).catch(e => { console.error(e); botFailed(g); });
 }
-function botFailed(g) { if (game !== g) return; g.phase = 'done'; g.result = 'lose'; g.loseMsg = 'Stockfish could not start in this browser.'; refreshGame(); }
+function botFailed(g) { if (game !== g || g.phase === 'done') return; g.phase = 'done'; g.result = 'lose'; g.loseMsg = 'Stockfish could not start in this browser.'; refreshGame(); }
 function botNext(g) {
+  if (g.phase === 'done') { refreshGame(); return; }   // resigned while the robots were still moving
   const b = g.bot, over = b.brain.over();
   if (over) {
     const humanMated = g.st.white === (b.human === 'w');
     g.phase = 'done'; g.result = over !== 'mate' ? 'draw' : humanMated ? 'lose' : 'win';
     g.loseMsg = 'Checkmate. Stockfish wins.'; g.winMsg = 'Checkmate. You win!'; g.drawMsg = `Draw: ${over}.`;
-    refreshGame(); return;
+    viewPly(g, g.history.length); refreshGame(); return;
   }
   if (g.st.white === (b.human === 'w')) { g.phase = 'user'; refreshGame(); return; }
   g.phase = 'robot'; refreshGame();
   b.brain.think(b.elo, $('botFight').checked, uci => {
-    if (game !== g) return;
+    if (game !== g || g.phase === 'done') return;
     const m = CH.legal(g.st).find(x => uciOf(x) === uci);
     if (m) playMove(m); else botFailed(g);
   }, () => botFailed(g));
 }
 const uciOf = m => CH.NAME(m.from) + CH.NAME(m.to) + (m.promo ? m.promo.toLowerCase() : '');
+function resign(g) {
+  if (g.bot.brain) g.bot.brain.stop();
+  viewPly(g, g.history.length);
+  const hold = g.phase === 'hold';
+  g.phase = 'done'; g.result = 'lose'; g.loseMsg = 'You resigned. Stockfish wins.';
+  // a captured piece still in the hand goes to the place kept for it on the tray
+  if (g.held && g.held.queued === null) {
+    const pt = cellXY(cells[g.held.a]);
+    if (hold) finishDrop(g, pt, () => afterMove()); else g.held.queued = pt;
+  }
+  refreshGame();
+}
+$('gResign').addEventListener('click', () => {
+  const g = game; if (!g || !g.bot || g.phase === 'done') return;
+  if (g.confirmResign) { g.confirmResign = false; resign(g); return; }
+  g.confirmResign = true; refreshGame();
+  setTimeout(() => { if (game === g && g.confirmResign) { g.confirmResign = false; refreshGame(); } }, 3000);
+});
+// =================== looking back through the moves ===================
+// Only the picture changes: the game, the engine and the robots carry on underneath.
+// frames[i] is how the board stood after i moves, recorded once all the pieces had come to rest.
+const GLIDE_MS = 160;
+let glide = null, shownPos = null;
+function snapshot(g) {
+  return { pos: agents.map((_, a) => { const p = loose[a] || cellXY(cells[a]); return { x: p.x, y: p.y }; }), types: agents.map(ag => ag.t), last: g.last, st: g.st };
+}
+const viewedPly = g => g.view === null ? g.history.length : g.view;
+function viewPly(g, ply) {
+  ply = Math.max(0, Math.min(g.history.length, ply));
+  if (ply === viewedPly(g)) return;
+  if (shownPos) glide = { from: shownPos, t0: performance.now() };
+  if (drag) { drag = null; skipClick = true; cv.classList.remove('dragging'); }
+  g.view = ply === g.history.length ? null : ply;
+  g.sel = -1;
+  refreshGame();
+}
+// the pieces of a past position, sliding there from where they were last drawn
+function glideOver(P, review) {
+  if (review) review.pos.forEach((p, a) => { P[a] = p; });
+  if (glide) {
+    const u = Math.min(1, (performance.now() - glide.t0) / GLIDE_MS), e = easeIO(u);
+    P.forEach((p, a) => { const q = glide.from[a]; P[a] = { x: q.x + (p.x - q.x) * e, y: q.y + (p.y - q.y) * e }; });
+    if (u >= 1) glide = null;
+  }
+  shownPos = P.slice();
+}
+$('gFirst').addEventListener('click', () => { if (game) viewPly(game, 0); });
+$('gBack').addEventListener('click', () => { if (game) viewPly(game, viewedPly(game) - 1); });
+$('gForward').addEventListener('click', () => { if (game) viewPly(game, viewedPly(game) + 1); });
+$('gLive').addEventListener('click', () => { if (game) viewPly(game, game.history.length); });
+$('gMoves').addEventListener('click', e => { const t = e.target.closest('.mv'); if (t && game) viewPly(game, +t.dataset.ply); });
+const moveLabel = (g, ply) => `${(ply + 1) >> 1}${ply % 2 ? '.' : '…'} ${g.history[ply - 1]}`;
 function refreshGame() {
   if (!game) return;
   const g = game, st = CH.status(g.st), side = g.st.white ? 'White' : 'Black';
   let text = '', cls = '';
-  if (g.result === 'win') { text = g.winMsg || 'Checkmate. Solved!'; cls = 'win'; }
+  if (g.view !== null) text = g.view ? `Looking back: after ${moveLabel(g, g.view)}` : 'Looking back: the starting position';
+  else if (g.result === 'win') { text = g.winMsg || 'Checkmate. Solved!'; cls = 'win'; }
   else if (g.result === 'draw') text = g.drawMsg;
   else if (g.result === 'lose') { text = g.loseMsg || 'Not mate in two.'; cls = 'lose'; }
   else if (st === 'mate') { text = 'Checkmate. ' + (g.st.white ? 'Black' : 'White') + ' wins.'; cls = 'win'; }
@@ -530,7 +595,15 @@ function refreshGame() {
   else text = (g.m2 || g.bot ? 'Your move' : side + ' to move') + (st === 'check' ? ' · check' : '');
   $('gStatus').textContent = text; $('gStatus').className = 'game-status ' + cls;
   cv.classList.toggle('holding', !!(g.held && g.held.queued === null));
-  $('gMoves').innerHTML = g.history.map((h, i) => (i % 2 === 0 ? `<b>${(i >> 1) + 1}.</b> ` : '') + h).join(' ') || '&nbsp;';
+  const move = (h, i) => g.bot ? `<span class="mv${i + 1 === viewedPly(g) ? ' on' : ''}" data-ply="${i + 1}">${h}</span>` : h;
+  $('gMoves').innerHTML = g.history.map((h, i) => (i % 2 === 0 ? `<b>${(i >> 1) + 1}.</b> ` : '') + move(h, i)).join(' ') || '&nbsp;';
+  if (g.bot) {
+    $('gFirst').disabled = $('gBack').disabled = viewedPly(g) === 0;
+    $('gForward').disabled = $('gLive').disabled = g.view === null;
+    $('gResign').hidden = g.phase === 'done';
+    $('gResign').textContent = g.confirmResign ? 'Really resign?' : 'Resign';
+    $('gResign').classList.toggle('confirm', !!g.confirmResign);
+  } else $('gResign').hidden = true;
 }
 function boardAgents() { const map = new Map(); cells.forEach((c, a) => map.set(c, a)); return map; }
 const isTrayCell = c => cx(c) < TRAY_W || cx(c) >= W - TRAY_W;
@@ -691,7 +764,7 @@ function afterMove() {
     return;
   }
   const st = CH.status(g.st);
-  if (g.bot) { botNext(g); return; }
+  if (g.bot) { g.frames[g.history.length] = snapshot(g); botNext(g); return; }
   if (!g.m2) { g.phase = 'user'; refreshGame(); return; }
   if (!g.st.white) { // the user just moved
     g.userMoves++;
@@ -753,7 +826,7 @@ function squareAtMouse() {
   const f = Math.floor(mouse.x - TRAY_W - GAP), r = Math.floor(mouse.y);
   return f < 0 || f > 7 || r < 0 || r > 7 ? -1 : r * 8 + f;
 }
-const canMove = g => g && !anim && g.phase === 'user' && !g.held && CH.status(g.st) !== 'mate' && CH.status(g.st) !== 'stalemate';
+const canMove = g => g && !anim && g.phase === 'user' && !g.held && g.view === null && CH.status(g.st) !== 'mate' && CH.status(g.st) !== 'stalemate';
 // =================== dragging a piece, as on chess.com or lichess (clicking two squares still works) ===================
 const DRAG_START = 0.12;   // squares the pointer has to travel before a press counts as a drag
 let drag = null, skipClick = false;
@@ -783,6 +856,7 @@ cv.addEventListener('click', e => {
   const g = game;
   if (skipClick) { skipClick = false; return; }
   trackMouse(e);
+  if (g && g.view !== null) { viewPly(g, g.history.length); return; }   // looking back: a click on the board returns to the game
   if (g && g.held && g.held.queued === null) { dropHeld(); return; }
   if (!g || anim || g.phase !== 'user' || CH.status(g.st) === 'mate' || CH.status(g.st) === 'stalemate') return;
   const sq = squareAtMouse();
@@ -800,11 +874,12 @@ $('gSolution').addEventListener('click', () => { if (game && game.keys && game.k
 function drawGameMarks() {
   const g = game; if (!g || anim && anim.kind === 'setup') return;
   const box = (sq, col, a) => { ctx.fillStyle = col; ctx.globalAlpha = a; ctx.fillRect(sqX(sq) - 0.5, sqY(sq) - 0.5, 1, 1); ctx.globalAlpha = 1; };
-  if (g.last) { box(g.last.from, tok['--accent'], 0.22); box(g.last.to, tok['--accent'], 0.32); }
+  const { last, st } = g.view !== null ? g.frames[g.view] : { last: g.last, st: g.st };
+  if (last) { box(last.from, tok['--accent'], 0.22); box(last.to, tok['--accent'], 0.32); }
   if (g.hint >= 0) box(g.hint, tok['--good'] || '#2f8a57', 0.45);
   if (g.sel >= 0) box(g.sel, tok['--accent'], 0.5);
-  if (CH.inCheck(g.st)) {
-    const k = g.st.b.indexOf(g.st.white ? 'K' : 'k');
+  if (CH.inCheck(st)) {
+    const k = st.b.indexOf(st.white ? 'K' : 'k');
     if (k >= 0) { ctx.strokeStyle = '#d23c2c'; ctx.lineWidth = 0.07; ctx.beginPath(); ctx.arc(sqX(k), sqY(k), 0.45, 0, 7); ctx.stroke(); }
   }
 }

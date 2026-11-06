@@ -87,6 +87,8 @@ Set an Elo from 500 to 3000, pick a color and press Play Stockfish: the robots c
 
 A pawn always promotes.
 
+Missed a move? The buttons under the move list, the arrow keys (← →, ↑ for the first position, ↓ for the current one) or a click on a move show any earlier position. Only the picture changes: the game, the engine and the robots carry on underneath, and a click on the board returns to the current move. Resign asks once more before it ends the game, and the moves can still be looked through afterwards.
+
 ## Run
 
 No packages are needed, only Python 3.8+ (or nothing at all, see below).

@@ -105,6 +105,12 @@ td.best { color: var(--good); font-weight: 500; }
 .game-status.win { color: var(--good); } .game-status.lose { color: var(--warn); }
 .moves { font-family: var(--f-mono); font-size: 13.5px; color: var(--muted); min-height: 1.4em; overflow-wrap: anywhere; }
 .moves b { color: var(--ink); font-weight: 500; }
+.moves .mv { cursor: pointer; border-radius: 3px; padding: 0 2px; }
+.moves .mv:hover { color: var(--ink); }
+.moves .mv.on { color: var(--ink); background: var(--line); }
+.game-nav[hidden] { display: none; }
+.game .game-nav .btn { flex: 1 1 0; font-family: var(--f-mono); }
+.btn.confirm { border-color: var(--warn); color: var(--warn); }
 .game .row { flex-wrap: wrap; }
 .game .btn { flex: 0 1 auto; }
 canvas.clickable { cursor: pointer; }

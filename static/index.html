@@ -6,7 +6,7 @@
 <title>Robot Chessboard Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="css/style.css?v=20261106d">
+<link rel="stylesheet" href="css/style.css?v=20261106e">
 </head>
 <body>
 <div class="wrap">
@@ -35,8 +35,15 @@
       <div class="game" id="game" hidden>
         <div class="game-head"><div class="game-status" id="gStatus">Your move</div><div class="clock" id="gMode"></div></div>
         <div class="moves" id="gMoves"></div>
+        <div class="row game-nav" id="gNav" hidden>
+          <button class="btn" id="gFirst" type="button" title="First position (↑ or Home)" aria-label="First position">|◀</button>
+          <button class="btn" id="gBack" type="button" title="Move back (←)" aria-label="Move back">◀</button>
+          <button class="btn" id="gForward" type="button" title="Move forward (→)" aria-label="Move forward">▶</button>
+          <button class="btn" id="gLive" type="button" title="Back to the current move (↓ or End)" aria-label="Back to the current move">▶|</button>
+        </div>
         <div class="row">
           <button class="btn" id="gRestart" type="button">Restart position</button>
+          <button class="btn" id="gResign" type="button" hidden>Resign</button>
           <button class="btn" id="gHint" type="button">Hint</button>
           <button class="btn" id="gSolution" type="button">Show solution</button>
         </div>
@@ -150,10 +157,10 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=20261106d"></script>
-<script src="js/puzzles.js?v=20261106d"></script>
-<script src="js/chess.js?v=20261106d"></script>
-<script src="js/pieces.js?v=20261106d"></script>
-<script src="js/app.js?v=20261106d"></script>
+<script src="js/engine.js?v=20261106e"></script>
+<script src="js/puzzles.js?v=20261106e"></script>
+<script src="js/chess.js?v=20261106e"></script>
+<script src="js/pieces.js?v=20261106e"></script>
+<script src="js/app.js?v=20261106e"></script>
 </body>
 </html>
