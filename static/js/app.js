@@ -26,13 +26,27 @@ const KING_BASE_RULE = 0.78;   // the usual guideline: king's base = 78% of the 
 const theme = () => $('pieceTheme').value;
 try { const t = localStorage.getItem('robo-theme'); if (t) $('pieceTheme').value = t; else if (localStorage.getItem('robo-discs') === '1') $('pieceTheme').value = 'discs'; } catch (e) {}
 const insideBase = t => t === 'true' || t === 'ring';
+// how much of the circle the largest symbols fill, in percent with one decimal; 97% is the size they were drawn for
+const SYMBOL_BASE = 97;
+const symbolScale = () => (+$('symbolPct').value || SYMBOL_BASE) / SYMBOL_BASE;
+function setSymbol(v, save = true) {
+  const pct = Math.round(Math.max(50, Math.min(120, +v || SYMBOL_BASE)) * 10) / 10;
+  $('symbolPct').value = pct.toFixed(1); $('symbolRange').value = pct;
+  if (save) { try { localStorage.setItem('robo-symbol', pct.toFixed(1)); } catch (e) {} }
+}
+try { const v = localStorage.getItem('robo-symbol'); if (v) setSymbol(v, false); } catch (e) {}
+$('symbolRange').addEventListener('input', () => setSymbol($('symbolRange').value));
+$('symbolPct').addEventListener('change', () => setSymbol($('symbolPct').value));
+const showSymbol = () => { $('symbolBox').hidden = !insideBase(theme()); };
 function applyThemeDiameter() { if (insideBase(theme())) { $('diam').value = KING_BASE_RULE; $('diamVal').textContent = KING_BASE_RULE.toFixed(2) + ' of a square'; } }
 let lastTheme = theme();
 $('pieceTheme').addEventListener('change', () => {
   try { localStorage.setItem('robo-theme', theme()); } catch (e) {}
   if (!insideBase(lastTheme)) applyThemeDiameter();   // between the two "inside" themes the slider stays where it is
   lastTheme = theme();
+  showSymbol();
 });
+showSymbol();
 // inside the base: size of each image as a multiple of the circle's diameter, and the centre of the smallest
 // circle around the symbol, in fractions of the image. King and queen fill the circle; the others follow the
 // height order of a real set (king, queen, bishop, knight, rook, pawn).
@@ -374,7 +388,7 @@ function drawPieceUp(ag, p, lifted) {
   const x = p.screen ? p.x : vx(p.x), y = p.y;
   const img = PIECE_IMG[ag.t];
   if (insideBase(theme()) && img && img.complete && img.naturalWidth) {
-    const D = diam(), f = INSIDE[ag.t.toUpperCase()], size = D * f.s;
+    const D = diam(), f = INSIDE[ag.t.toUpperCase()], size = D * f.s * symbolScale();
     ctx.save();
     if (theme() === 'ring') { ctx.strokeStyle = tok['--muted']; ctx.globalAlpha = 0.55; ctx.lineWidth = 0.015; ctx.beginPath(); ctx.arc(x, y, D / 2, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
     if (lifted) { ctx.shadowColor = tok['--shadow']; ctx.shadowBlur = 0.12 * S; ctx.shadowOffsetY = 0.04 * S; }
