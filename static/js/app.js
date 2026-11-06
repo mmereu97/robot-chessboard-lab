@@ -481,23 +481,27 @@ function trayRect(left) {
     : { x0: W - TRAY_W + D / 2, x1: W - TRAY_W + w - D / 2, y0: D / 2, y1: 8 - D / 2 };
 }
 const trayOf = j => isTrayCell(cells[j]) ? trayRect(cx(cells[j]) < TRAY_W) : null;
-function roomPlan(a, pts) {
+function roomPlan(a, pts, inAir = false) {
   const pos = agents.map((_, j) => j === a ? pts[0] : (loose[j] || cellXY(cells[j])));
-  const plan = planNudge(cells, cells, opt(), { pos, a, pts, rect: j => j === a ? null : trayOf(j) });
+  const plan = planNudge(cells, cells, opt(), { pos, a, pts, inAir, rect: j => j === a ? null : trayOf(j) });
   if (!plan.ok) return null;
   plan.starts = cells.slice(); plan.goals = cells.slice();
   for (const s of plan.stayed) loose[s.j] = s.at;
   return plan;
 }
+// points on a tray to try when a piece does not fit where it should: the closest and least crowded first
+function spotsNear(a, q0, left) {
+  const r = trayRect(left), D = diam(), spots = [];
+  for (let x = r.x0; x <= r.x1 + 1e-9; x += D / 3) for (let y = r.y0; y <= r.y1 + 1e-9; y += D / 3) spots.push({ x, y });
+  const crowd = q => { let c = 0; agents.forEach((_, j) => { if (j !== a && trayOf(j)) { const p = loose[j] || cellXY(cells[j]), d = Math.hypot(p.x - q.x, p.y - q.y); if (d < D) c += D - d; } }); return c; };
+  const score = q => Math.hypot(q.x - q0.x, q.y - q0.y) + 3 * crowd(q);
+  return spots.sort((p, q) => score(p) - score(q)).slice(0, 24);
+}
 // The shortest way off the board: along its rank to the edge of the tray, stopping as soon as it is
 // inside. If the pieces there cannot make room at that point, the nearest point where they can.
 function removeToTray(a, fromCell, slot) {
   const from = cellXY(fromCell), left = cx(slot) < TRAY_W, r = trayRect(left), edge = left ? r.x1 : r.x0;
-  const D = diam(), spots = [];
-  for (let x = r.x0; x <= r.x1 + 1e-9; x += D / 3) for (let y = r.y0; y <= r.y1 + 1e-9; y += D / 3) spots.push({ x, y });
-  const crowd = q => { let c = 0; agents.forEach((_, j) => { if (j !== a && trayOf(j)) { const p = loose[j] || cellXY(cells[j]), d = Math.hypot(p.x - q.x, p.y - q.y); if (d < D) c += D - d; } }); return c; };
-  const score = q => Math.hypot(q.x - from.x, q.y - from.y) + 3 * crowd(q);
-  const tries = [{ x: edge, y: from.y }, ...spots.sort((p, q) => score(p) - score(q)).slice(0, 24)];
+  const tries = [{ x: edge, y: from.y }, ...spotsNear(a, from, left)];
   const before = cells;
   for (const end of tries) {
     const L = Math.hypot(end.x - from.x, end.y - from.y), m = Math.max(2, Math.round(L / 0.05)), pts = [];
@@ -567,8 +571,9 @@ function dropHeld() {
 function finishDrop(g, pt, then) {
   const a = g.held.a, left = pt.x < W / 2;
   if ((cx(cells[a]) < TRAY_W) !== left) { const c = freeTraySlotOn(left, cellXY(cells[a])); if (c >= 0) { cells = cells.slice(); cells[a] = c; } }
-  const plan = roomPlan(a, [pt, { ...pt }]);
-  loose[a] = pt; g.held = null;
+  let plan = null, at = pt;
+  for (const q of [pt, ...spotsNear(a, pt, left)]) { plan = roomPlan(a, [q, { ...q }], true); if (plan) { at = q; break; } }
+  loose[a] = at; g.held = null;
   cv.classList.remove('holding');
   if (plan && plan.stayed.length) { plan.segs = plan.segs.filter(x => x.a !== a); runSettle(plan, then); } else then();
 }

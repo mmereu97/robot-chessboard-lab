@@ -915,8 +915,9 @@ function planNudge(starts, goals, opt, extra) {
         else {
           const k = Math.min(pts.length - 1, i + 2), l = Math.max(0, i - 2), tx = pts[k].x - pts[l].x, ty = pts[k].y - pts[l].y, tl = Math.hypot(tx, ty) || 1;
           ux = -ty / tl; uy = tx / tl;
+          if (!ux && !uy) uy = 1;      // a piece put down exactly on top of another: no direction of travel to go by
           // at the end of a trip into a tray, the piece in the way goes further in
-          if (extra && extra.rect(j) && i >= pts.length - 3 && tl > 1e-6) { ux = tx / tl; uy = ty / tl; X[j] = { x: X[j].x + ux * (R - d), y: X[j].y + uy * (R - d) }; continue; }
+          if (extra && extra.rect(j) && i >= pts.length - 3 && Math.hypot(tx, ty) > 1e-6) { ux = tx / tl; uy = ty / tl; X[j] = { x: X[j].x + ux * (R - d), y: X[j].y + uy * (R - d) }; continue; }
           const room = o => { let q = 0; for (let b = 0; b < n; b++) if (b !== j && b !== a) { const e = Math.hypot(X[b].x - X[j].x - o * ux, X[b].y - X[j].y - o * uy); if (e < 1.2) q += 1.2 - e; } return q; };
           if (room(1) > room(-1)) { ux = -ux; uy = -uy; }
         }
@@ -1021,7 +1022,9 @@ function planNudge(starts, goals, opt, extra) {
     const end = Math.max(...segs.map(x => x.t1), ...busyUntil) + 0.05;   // what is already under way must not run into it later
     // before its part in this trip a piece is still doing whatever was planned for it earlier
     const myAt = (a, tt) => { const l = mine.get(a); let s = null; for (const x of l) if (x.t0 <= tt) s = x; return s ? segPos(s, tt) : at(a, tt); };
-    const ids = [...mine.keys()], others = []; for (let b = 0; b < n; b++) if (!mine.has(b)) others.push(b);
+    // a piece being put down by hand is in the air until the others have made room
+    const inAir = b => extra && extra.inAir && b === extra.a;
+    const ids = [...mine.keys()].filter(b => !inAir(b)), others = []; for (let b = 0; b < n; b++) if (!mine.has(b) && !inAir(b)) others.push(b);
     for (let tt = t; tt <= end; tt += TICK) {
       const P = ids.map(a => myAt(a, tt));
       for (let i = 0; i < ids.length; i++) {
