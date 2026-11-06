@@ -91,11 +91,17 @@ try { if (localStorage.getItem('robo-tab') === 'sizes') showTab('sizes'); } catc
 const sel = $('pzSel');
 {
   const groups = { classic: 'Classic positions', m2: 'Mate in two' }, og = {};
+  if (PUZZLES.some(p => p.mine)) {   // from the private file, when there is one
+    groups.mine = 'My puzzles';
+    const o = document.createElement('option'); o.value = 'mine'; o.textContent = 'My puzzles only'; $('poolSel').appendChild(o);
+  }
   for (const g in groups) { og[g] = document.createElement('optgroup'); og[g].label = groups[g]; sel.appendChild(og[g]); }
-  PUZZLES.forEach((p, i) => { const o = document.createElement('option'); o.value = 'p' + i; o.textContent = p.name; og[p.set || 'classic'].appendChild(o); });
+  PUZZLES.forEach((p, i) => { const o = document.createElement('option'); o.value = 'p' + i; o.textContent = p.name; og[p.mine ? 'mine' : p.set || 'classic'].appendChild(o); });
   const o = document.createElement('option'); o.value = 'rand'; o.textContent = 'Random generated position'; og.classic.appendChild(o);
 }
 try { const v = localStorage.getItem('robo-pool'); if (v) $('poolSel').value = v; } catch (e) {}
+if (!$('poolSel').value) $('poolSel').value = 'all';
+const inPool = (p, pool) => pool === 'all' || (pool === 'mine' ? p.mine : !p.mine && (p.set || 'classic') === pool);
 $('poolSel').addEventListener('change', () => { try { localStorage.setItem('robo-pool', $('poolSel').value); } catch (e) {} });
 const algosEl = $('algos');
 ['fast', 'nudge', 'ca', 'pibt', 'seq', 'naive'].map(k => [k, ALGOS[k]]).forEach(([k, A]) => {
@@ -121,8 +127,8 @@ function puzzleFor(key) {
 }
 function randomKey() {
   const pool = $('poolSel').value;
-  if (pool !== 'm2' && Math.random() < (pool === 'all' ? 0.08 : 0.15)) return 'rand';
-  const ids = PUZZLES.map((p, i) => i).filter(i => pool === 'all' || (PUZZLES[i].set || 'classic') === pool);
+  if (pool !== 'm2' && pool !== 'mine' && Math.random() < (pool === 'all' ? 0.08 : 0.15)) return 'rand';
+  const ids = PUZZLES.map((p, i) => i).filter(i => inPool(PUZZLES[i], pool));
   let k; do { k = 'p' + ids[Math.floor(Math.random() * ids.length)]; } while (k === currentKey && ids.length > 1);
   return k;
 }
@@ -296,7 +302,7 @@ $('goBtn').addEventListener('click', () => request(randomKey()));
 // step through the puzzles of the chosen pool in list order (wraps around)
 function stepKey(dir) {
   const pool = $('poolSel').value;
-  const ids = PUZZLES.map((p, i) => i).filter(i => pool === 'all' || (PUZZLES[i].set || 'classic') === pool);
+  const ids = PUZZLES.map((p, i) => i).filter(i => inPool(PUZZLES[i], pool));
   const base = pending ? pending.key : currentKey;
   const cur = base && base[0] === 'p' ? ids.indexOf(+base.slice(1)) : -1;
   const next = cur < 0 ? (dir > 0 ? 0 : ids.length - 1) : (cur + dir + ids.length) % ids.length;
@@ -541,7 +547,7 @@ let game = null, flip = false;
 const loose = new Array(agents.length).fill(null);
 const sqToCell = sq => (sq >> 3) * W + TRAY_W + (sq & 7);
 const sqX = sq => vx(TRAY_W + (sq & 7) + 0.5), sqY = sq => (sq >> 3) + 0.5;
-function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); game = null; glide = null; trayHand = null; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
+function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); game = null; glide = null; trayHand = null; $('gPromo').hidden = true; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
 function startGame(pz) {
   const m2 = pz.set === 'm2';
   game = { pz, st: CH.fromFEN(pz.fen, true), m2, history: [], sel: -1, last: null, phase: 'user', userMoves: 0, hint: -1, result: '', view: null };
@@ -597,6 +603,7 @@ const uciOf = m => CH.NAME(m.from) + CH.NAME(m.to) + (m.promo ? m.promo.toLowerC
 function resign(g) {
   if (g.bot.brain) g.bot.brain.stop();
   viewPly(g, g.history.length);
+  g.asking = null;
   const hold = g.phase === 'hold';
   g.phase = 'done'; g.result = 'lose'; g.loseMsg = 'You resigned. Stockfish wins.';
   // a captured piece still in the hand goes to the place kept for it on the tray
@@ -628,7 +635,7 @@ function viewPly(g, ply) {
   if (drag) { drag = null; skipClick = true; cv.classList.remove('dragging'); }
   if (trayHand) { trayHand = null; skipClick = true; cv.classList.remove('dragging'); }
   g.view = ply === g.history.length ? null : ply;
-  g.sel = -1;
+  g.sel = -1; g.asking = null;
   refreshGame();
 }
 // the pieces of a past position, sliding there from where they were last drawn
@@ -657,6 +664,7 @@ function refreshGame() {
   else if (g.result === 'lose') { text = g.loseMsg || 'Not mate in two.'; cls = 'lose'; }
   else if (st === 'mate') { text = 'Checkmate. ' + (g.st.white ? 'Black' : 'White') + ' wins.'; cls = 'win'; }
   else if (st === 'stalemate') { text = 'Stalemate.'; }
+  else if (g.asking) text = 'Promote to:';
   else if (trayHand && trayHand.moved) text = `Put the ${PIECE_NAME[agents[trayHand.a].t.toLowerCase()]} down on either tray.`;
   else if (g.held && g.held.queued === null) text = `Take the ${PIECE_NAME[agents[g.held.a].t.toLowerCase()]} off the board: click a free place on a tray.`;
   else if (g.phase === 'loading') text = 'Starting Stockfish…';
@@ -665,6 +673,7 @@ function refreshGame() {
   else text = (g.m2 || g.bot ? 'Your move' : side + ' to move') + (st === 'check' ? ' · check' : '');
   $('gStatus').textContent = text; $('gStatus').className = 'game-status ' + cls;
   cv.classList.toggle('holding', !!(g.held && g.held.queued === null));
+  $('gPromo').hidden = !g.asking;
   const move = (h, i) => g.bot ? `<span class="mv${i + 1 === viewedPly(g) ? ' on' : ''}" data-ply="${i + 1}">${h}</span>` : h;
   $('gMoves').innerHTML = g.history.map((h, i) => (i % 2 === 0 ? `<b>${(i >> 1) + 1}.</b> ` : '') + move(h, i)).join(' ') || '&nbsp;';
   if (g.bot) {
@@ -882,10 +891,18 @@ function legalFrom(sq) {
   if (!game) return [];
   return CH.legal(game.st).filter(m => m.from === sq);
 }
-function pickPromo(list) { // auto-promote to the best piece available in the tray
-  for (const t of 'QRBN') { const m = list.find(x => x.promo && x.promo.toUpperCase() === t); if (m) return m; }
-  return list[0];
+// a move onto the last rank asks which piece it becomes; the pawn waits until you say
+function moveOrAsk(ms, dropped = false) {
+  if (ms.length === 1) { playMove(ms[0], true, dropped); return; }
+  game.asking = { ms, dropped };
+  refreshGame();
 }
+document.querySelectorAll('#gPromo [data-promo]').forEach(b => b.addEventListener('click', () => {
+  const g = game; if (!g || !g.asking) return;
+  const { ms, dropped } = g.asking, m = ms.find(x => x.promo.toUpperCase() === b.dataset.promo);
+  g.asking = null;
+  playMove(m, true, dropped);
+}));
 // =================== a captured piece in the hand ===================
 const PIECE_NAME = { k: 'king', q: 'queen', r: 'rook', b: 'bishop', n: 'knight', p: 'pawn' };
 const mouse = { x: 0, y: 0 };
@@ -967,7 +984,7 @@ function squareAtMouse() {
   const f = Math.floor(mouse.x - TRAY_W - GAP), r = Math.floor(mouse.y);
   return f < 0 || f > 7 || r < 0 || r > 7 ? -1 : r * 8 + f;
 }
-const canMove = g => g && !anim && g.phase === 'user' && !g.held && g.view === null && CH.status(g.st) !== 'mate' && CH.status(g.st) !== 'stalemate';
+const canMove = g => g && !anim && g.phase === 'user' && !g.held && !g.asking && g.view === null && CH.status(g.st) !== 'mate' && CH.status(g.st) !== 'stalemate';
 // =================== dragging a piece, as on chess.com or lichess (clicking two squares still works) ===================
 const DRAG_START = 0.12;   // squares the pointer has to travel before a press counts as a drag
 let drag = null, skipClick = false;
@@ -1002,7 +1019,7 @@ window.addEventListener('pointerup', e => {
   skipClick = true;
   const g = game, to = squareAtMouse();
   const ms = canMove(g) && to !== d.sq ? legalFrom(d.sq).filter(m => m.to === to) : [];
-  if (ms.length) playMove(ms.length > 1 ? pickPromo(ms) : ms[0], true, true);
+  if (ms.length) moveOrAsk(ms, true);
 });
 window.addEventListener('pointercancel', () => { drag = null; trayHand = null; cv.classList.remove('dragging'); });
 window.addEventListener('keydown', e => { if (e.code === 'Escape' && trayHand) { trayHand = null; cv.classList.remove('dragging'); refreshGame(); } });
@@ -1010,6 +1027,7 @@ cv.addEventListener('click', e => {
   const g = game;
   if (skipClick) { skipClick = false; return; }
   trackMouse(e);
+  if (g && g.asking) { g.asking = null; g.sel = -1; refreshGame(); return; }   // changed your mind about the promotion
   if (g && g.view !== null) { viewPly(g, g.history.length); return; }   // looking back: a click on the board returns to the game
   if (g && g.held && g.held.queued === null) { dropHeld(); return; }
   if (!g || anim || g.phase !== 'user' || CH.status(g.st) === 'mate' || CH.status(g.st) === 'stalemate') return;
@@ -1018,13 +1036,13 @@ cv.addEventListener('click', e => {
   const p = g.st.b[sq];
   if (g.sel >= 0) {
     const ms = legalFrom(g.sel).filter(m => m.to === sq);
-    if (ms.length) { playMove(ms.length > 1 ? pickPromo(ms) : ms[0], true); return; }
+    if (ms.length) { moveOrAsk(ms); return; }
   }
   g.sel = (p && (p === p.toUpperCase()) === g.st.white && legalFrom(sq).length) ? sq : -1;
 });
 $('gRestart').addEventListener('click', () => { if (game && !anim) request(currentKey); });
 $('gHint').addEventListener('click', () => { if (game && game.keys && game.keys.length && game.history.length === 0) { game.hint = game.keys[0].from; game.sel = -1; $('gStatus').textContent = 'Hint: the highlighted piece starts the combination.'; } });
-$('gSolution').addEventListener('click', () => { if (game && game.keys && game.keys.length) { const st0 = CH.fromFEN(game.pz.fen, true); $('gStatus').textContent = 'Key move: ' + game.keys.map(k => CH.san(st0, k)).join(' or '); $('gStatus').className = 'game-status'; } });
+$('gSolution').addEventListener('click', () => { if (game && game.pz.sol) { $('gStatus').textContent = game.pz.sol; $('gStatus').className = 'game-status'; return; } if (game && game.keys && game.keys.length) { const st0 = CH.fromFEN(game.pz.fen, true); $('gStatus').textContent = 'Key move: ' + game.keys.map(k => CH.san(st0, k)).join(' or '); $('gStatus').className = 'game-status'; } });
 function drawGameMarks() {
   const g = game; if (!g || anim && anim.kind === 'setup') return;
   const box = (sq, col, a) => { ctx.fillStyle = col; ctx.globalAlpha = a; ctx.fillRect(sqX(sq) - 0.5, sqY(sq) - 0.5, 1, 1); ctx.globalAlpha = 1; };

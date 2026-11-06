@@ -95,7 +95,7 @@ Set an Elo from 100 to 3000, pick a color and press Play Stockfish: the robots c
 
 Below Elo 500 the brain cannot get any weaker, so part of its moves are chosen at random: from none at 500 to 80% at 100, for a child's first games. These levels are a slope, not a measurement. Against level 500, level 100 lost all of 14 games and level 300 lost 13 and drew one, so they are weaker, but their numbers are not calibrated Elo as the levels from about 540 up are.
 
-A pawn always promotes.
+A pawn reaching the last rank asks which piece it becomes, as on chess.com; a click on the board takes the move back.
 
 Missed a move? The buttons under the move list, the arrow keys (← →, ↑ for the first position, ↓ for the current one) or a click on a move show any earlier position. Only the picture changes: the game, the engine and the robots carry on underneath, and a click on the board returns to the current move. Resign asks once more before it ends the game, and the moves can still be looked through afterwards.
 
@@ -130,6 +130,8 @@ Add a line to `PUZZLES` in `static/js/puzzles.js`:
 ```js
 { name: 'Mate in two #79', desc: 'White to move.', fen: '6k1/5ppp/8/8/8/8/5PPP/3R2K1', set: 'm2' },
 ```
+
+Puzzles of your own can stay off the public site: put them in `static/js/puzzles-private.js`, which git ignores and the page loads only on localhost (run `serve.py`). The file calls `PUZZLES.push(...)` with the same fields, plus `mine: true` for the group “My puzzles” and optionally `sol`, the text that Show solution displays.
 
 `set: 'm2'` makes the robot defend with Black and checks for mate in two; leave it out for free play. Only the piece-placement part of the FEN is needed. No side may have more pieces of a type than a normal set (e.g. two white queens), because the real trays only hold one set.
 

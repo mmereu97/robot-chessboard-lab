@@ -6,7 +6,7 @@
 <title>Robot Chessboard Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="css/style.css?v=20261106h">
+<link rel="stylesheet" href="css/style.css?v=20261107a">
 </head>
 <body>
 <div class="wrap">
@@ -35,6 +35,12 @@
       <div class="game" id="game" hidden>
         <div class="game-head"><div class="game-status" id="gStatus">Your move</div><div class="clock" id="gMode"></div></div>
         <div class="moves" id="gMoves"></div>
+        <div class="row game-promo" id="gPromo" hidden>
+          <button class="btn" type="button" data-promo="Q">Queen</button>
+          <button class="btn" type="button" data-promo="R">Rook</button>
+          <button class="btn" type="button" data-promo="B">Bishop</button>
+          <button class="btn" type="button" data-promo="N">Knight</button>
+        </div>
         <div class="row game-nav" id="gNav" hidden>
           <button class="btn" id="gFirst" type="button" title="First position (↑ or Home)" aria-label="First position">|◀</button>
           <button class="btn" id="gBack" type="button" title="Move back (←)" aria-label="Move back">◀</button>
@@ -157,10 +163,11 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=20261106h"></script>
-<script src="js/puzzles.js?v=20261106h"></script>
-<script src="js/chess.js?v=20261106h"></script>
-<script src="js/pieces.js?v=20261106h"></script>
-<script src="js/app.js?v=20261106h"></script>
+<script src="js/engine.js?v=20261107a"></script>
+<script src="js/puzzles.js?v=20261107a"></script>
+<script>if (/^(localhost$|127\.)/.test(location.hostname)) document.write('<script src="js/puzzles-private.js"><\/script>');</script>
+<script src="js/chess.js?v=20261107a"></script>
+<script src="js/pieces.js?v=20261107a"></script>
+<script src="js/app.js?v=20261107a"></script>
 </body>
 </html>

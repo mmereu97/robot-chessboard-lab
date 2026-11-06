@@ -108,7 +108,8 @@ td.best { color: var(--good); font-weight: 500; }
 .moves .mv { cursor: pointer; border-radius: 3px; padding: 0 2px; }
 .moves .mv:hover { color: var(--ink); }
 .moves .mv.on { color: var(--ink); background: var(--line); }
-.game-nav[hidden] { display: none; }
+.game-nav[hidden], .game-promo[hidden] { display: none; }
+.game .game-promo .btn { flex: 1 1 0; }
 .game .game-nav .btn { flex: 1 1 0; font-family: var(--f-mono); }
 .btn.confirm { border-color: var(--warn); color: var(--warn); }
 .game .row { flex-wrap: wrap; }
