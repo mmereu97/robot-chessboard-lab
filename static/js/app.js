@@ -342,12 +342,13 @@ function draw() {
     ctx.fillStyle = (r + f) % 2 ? tok['--sq-dark'] : tok['--sq-light'];
     ctx.fillRect(bx + f, r, 1.002, 1.002);
   }
-  ctx.font = '500 0.17px "IBM Plex Mono", monospace'; ctx.textBaseline = 'alphabetic';
+  // coordinates in the corners of the edge squares, in the colour of the other squares
+  ctx.font = '600 0.2px "IBM Plex Mono", monospace'; ctx.textBaseline = 'alphabetic';
   for (let i = 0; i < 8; i++) {
+    ctx.fillStyle = (7 + i) % 2 ? tok['--sq-light'] : tok['--sq-dark'];
+    ctx.textAlign = 'left'; ctx.fillText((flip ? 'hgfedcba' : 'abcdefgh')[i], bx + i + 0.82, 7.95);   // right alignment misplaces a font this small
     ctx.fillStyle = i % 2 ? tok['--sq-light'] : tok['--sq-dark'];
-    ctx.textAlign = 'right'; ctx.fillText((flip ? 'hgfedcba' : 'abcdefgh')[i], bx + i + 0.94, 7.94);
-    ctx.fillStyle = i % 2 ? tok['--sq-dark'] : tok['--sq-light'];
-    ctx.textAlign = 'left'; ctx.fillText(String(flip ? i + 1 : 8 - i), bx + 0.05, i + 0.2);
+    ctx.textAlign = 'left'; ctx.fillText(String(flip ? i + 1 : 8 - i), bx + 0.05, i + 0.21);
   }
   // playing Black: everything from here on is turned around the board's centre, and each piece back upright
   if (flip) { ctx.save(); ctx.translate(wU, 8); ctx.scale(-1, -1); }
