@@ -506,7 +506,7 @@ function botNext(g) {
   }
   if (g.st.white === (b.human === 'w')) { g.phase = 'user'; refreshGame(); return; }
   g.phase = 'robot'; refreshGame();
-  b.brain.think(b.elo, uci => {
+  b.brain.think(b.elo, $('botFight').checked, uci => {
     if (game !== g) return;
     const m = CH.legal(g.st).find(x => uciOf(x) === uci);
     if (m) playMove(m); else botFailed(g);

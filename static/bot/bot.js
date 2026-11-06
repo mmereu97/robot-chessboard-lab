@@ -1,6 +1,6 @@
 /* The human-like Stockfish bot from chess-analysis-board (https://github.com/mmereu97/chess-analysis-board).
-   The helpers and the bot brain below are copied from it unchanged, so it keeps its calibration; only the driver at
-   the end is new. Licensed GPL-3.0, like that project: see LICENSE-GPL-3.0.txt in this folder. */
+   The helpers and the bot brain below are copied from it, so it keeps its calibration. One change: the rule that it
+   stops making mistakes when a rook or more down applies only with cfg.fightBack. The driver at the end is new. Licensed GPL-3.0, like that project: see LICENSE-GPL-3.0.txt in this folder. */
 import { Chess } from "./chess.js";
 
 const turnOf = fen => fen.split(" ")[1];
@@ -86,7 +86,7 @@ const OPENING_MOVES = 8;   // in the first moves the human bot plays sound, most
 function botPlan(cfg, fen){
   if (cfg.style === "window" || cfg.style === "rank") return {multipv:10, depth:10};
   const depth = Math.max(1, 2 + Math.round(6 * eloT(cfg.elo)));
-  if (fen && behindBy(fen) >= 5) return {multipv:8, depth:12};
+  if (cfg.fightBack && fen && behindBy(fen) >= 5) return {multipv:8, depth:12};
   if (fen && pawnAlarm(fen)) return {multipv:8, depth:Math.max(depth, 9)};
   return {multipv:8, depth: fen && moveNo(fen) <= OPENING_MOVES ? Math.max(depth, 10) : depth};
 }
@@ -199,7 +199,7 @@ function botDecide(cfg, fen, lines, last, rnd = Math.random){
   const t = eloT(cfg.elo);
   // a rook or more down: no more mistakes, it fights with the best move
   const byFocus = pool => { const top = Math.max(...pool.map(o => by[o.pv[0]].focus)); const f = pool.filter(o => by[o.pv[0]].focus === top); return f[Math.floor(rnd() * f.length)]; };
-  if (behindBy(fen) >= 5){
+  if (cfg.fightBack && behindBy(fen) >= 5){
     const pool = lines.filter(o => !by[o.pv[0]].gift && best - lineScore(o) <= 150);
     if (pool.length && pool.some(o => by[o.pv[0]].focus > 0)) return {move:byFocus(pool).pv[0], reason:"behind-pawn"};
     return {move:lines[0].pv[0], reason:"behind"};
@@ -328,6 +328,7 @@ function onLine(l){
   const wait = Math.max(0, (500 + Math.random() * 1100) - (performance.now() - P.t0));   // a human takes a variable time
   setTimeout(() => { if (!P.dead) P.onMove(choice); }, wait);
 }
+export { botPlan, botDecide };
 /* one game: the moves so far, the end of the game, and the bot's next move */
 export function newGame(startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"){
   const c = new Chess(startFen), fens = [startFen], moves = [];
@@ -344,8 +345,8 @@ export function newGame(startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR 
       if (+c.fen().split(" ")[4] >= 100) return "the fifty-move rule";
       return null;
     },
-    think(elo, onMove, onError){
-      const fen = c.fen(), cfg = {style:"human", elo:eloToInternal(elo), disp:elo};
+    think(elo, fightBack, onMove, onError){
+      const fen = c.fen(), cfg = {style:"human", elo:eloToInternal(elo), disp:elo, fightBack};
       const pos = moves.length ? `position fen ${startFen} moves ${moves.map(m => m.lan).join(" ")}` : "position fen " + fen;
       const P = current = job = {fen, cfg, pos, lines:{}, t0:performance.now(), last:moves[moves.length - 1] || null, stage:"main", ctx:null, official:elo >= LIMIT_MIN, depth:1, onMove, onError};
       const e = engine();

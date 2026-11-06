@@ -83,7 +83,7 @@ Pieces are not tied to parking places: every plan starts from where the pieces r
 
 ## Play Stockfish
 
-Set an Elo from 500 to 3000, pick a color and press Play Stockfish: the robots carry out both sides' moves on the board. The bot is the one from [chess-analysis-board](https://github.com/mmereu97/chess-analysis-board), copied with its calibration unchanged. Below Elo 1320 it plays and errs like a person: sound opening moves, moves played for an idea, instinctive checks, a rare blunder. From 1320 up it is Stockfish's own strength limit. Playing Black turns the board around. The page always opens on such a game, with you as White against Elo 800; the engine starts with Stockfish's first move.
+Set an Elo from 500 to 3000, pick a color and press Play Stockfish: the robots carry out both sides' moves on the board. The bot is the one from [chess-analysis-board](https://github.com/mmereu97/chess-analysis-board), copied with its calibration. Below Elo 1320 it plays and errs like a person: sound opening moves, moves played for an idea, instinctive checks, a rare blunder. An option, off by default, makes it stop making mistakes once it is a rook or more down; its Elo was calibrated with that rule on, so without it the bot is a little weaker when behind. From 1320 up it is Stockfish's own strength limit. Playing Black turns the board around. The page always opens on such a game, with you as White against Elo 800; the engine starts with Stockfish's first move.
 
 A pawn always promotes.
 
