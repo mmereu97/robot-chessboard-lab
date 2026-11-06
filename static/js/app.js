@@ -127,12 +127,17 @@ function request(key) {
   if (anim) { pending = { key, pz }; $('queueTag').textContent = 'queued: ' + pz.name; return; }
   launch(key, pz);
 }
+// says on the page what opened a position, to find out why one appears unasked
+let lastInput = 'the page';
+window.addEventListener('click', e => { const t = e.target; lastInput = 'click on ' + (t.id || (t.closest('button,select,label,a') || t).id || t.tagName.toLowerCase()); }, true);
+window.addEventListener('change', e => { lastInput = 'change of ' + (e.target.id || e.target.tagName.toLowerCase()); }, true);
+window.addEventListener('keydown', e => { lastInput = 'key ' + e.code; }, true);
 function launch(key, pz, fromStarts) {
   releaseHeld();
   agents.forEach((ag, a) => { ag.t = FULL_SET[a]; }); // a promoted pawn goes back to being a pawn
   flip = !!(pz.bot && pz.bot.human === 'b');
   currentKey = key; sel.value = key;
-  $('pzName').textContent = pz.name; $('pzDesc').textContent = pz.desc;
+  $('pzName').textContent = pz.name; $('pzDesc').textContent = pz.desc + (pz.bot ? '' : ` Opened by: ${lastInput}.`);
   $('clock').textContent = algo === 'fast' ? 'optimizing paths…' : 'planning paths…'; $('note').textContent = '';
   if (fromStarts) { cells = fromStarts.slice(); loose.fill(null); }
   const go = () => {
@@ -244,6 +249,7 @@ $('replayBtn').addEventListener('click', () => { if (!last || anim) return; carP
 document.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName;
   if (/INPUT|SELECT|TEXTAREA/.test(tag)) return;
+  if (game && game.bot) return;   // a stray key must not end a game against Stockfish
   if (e.code === 'Space') { if (tag === 'BUTTON') return; e.preventDefault(); request(randomKey()); }
   if (e.code === 'KeyR') { e.preventDefault(); request('p0'); }
   if (e.code === 'ArrowRight') { e.preventDefault(); request(stepKey(1)); }
