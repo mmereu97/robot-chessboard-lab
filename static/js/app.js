@@ -93,6 +93,7 @@ function launch(key, pz, fromStarts) {
     const starts = cells.slice();
     const plan = planTransition(algo, agents, starts, pz.fen, opt(), carPos);
     last = { starts, pz, key, carStart: { ...carPos } };
+    pileUp(plan);
     anim = { plan, by: buildIndex(plan, agents.length), t: 0, prev: performance.now(), kind: 'setup', pz };
     endGame();
     if (plan.carEnd) carPos = { ...plan.carEnd };
@@ -102,14 +103,76 @@ function launch(key, pz, fromStarts) {
     lastCmp = null; $('cmpTable').hidden = true; $('cmpEmpty').hidden = false;
     $('cmpEmpty').textContent = 'Press “Compare planners” to run all six on this transition.';
   };
-  // the planners work on a grid: pieces lying anywhere on a tray first slide to a place on it
-  setTimeout(() => {
-    const segs = [];
-    loose.forEach((p, a) => { if (p) segs.push(lineSeg(a, 0, p, cellXY(cells[a]))); });
-    if (!segs.length) { go(); return; }
-    loose.fill(null);
-    runSettle({ ok: true, segs, car: null, makespan: Math.max(...segs.map(s => s.t1)), dist: 0, carEmpty: 0, moves: segs.length, temps: 0, waits: 0, parallel: true, clearance: diam(), algo: algo, diam: diam(), lb: 0 }, go);
-  }, 20);
+  setTimeout(go, 20);
+}
+// The planners work on a grid, the trays do not. A piece that stays on a tray stays where it lies, a piece
+// that leaves one starts its trip from where it lies, and a piece that arrives on one ends up in the heap.
+function pileUp(plan) {
+  const D = diam(), by = buildIndex(plan, agents.length), final = agents.map((_, a) => isTrayCell(plan.goals[a]));
+  const left = a => cx(plan.goals[a]) < TRAY_W;
+  const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+  const pos = agents.map((_, a) => {
+    const stays = plan.goals[a] === plan.starts[a] && !by[a].length;
+    if (stays && loose[a]) return { ...loose[a], fixed: true };
+    if (!final[a]) return null;
+    const c = cellXY(plan.goals[a]);
+    return { x: c.x + 0.8 * gauss(), y: 4 + (c.y - 4) * 0.8 + 0.5 * gauss() };
+  });
+  // nobody overlaps: arrivals push each other apart and go around those already lying there
+  for (let it = 0; it < 300; it++) {
+    let moved = false;
+    for (let i = 0; i < pos.length; i++) for (let j = i + 1; j < pos.length; j++) {
+      if (!pos[i] || !pos[j] || !final[i] || !final[j] || left(i) !== left(j)) continue;
+      const dx = pos[j].x - pos[i].x, dy = pos[j].y - pos[i].y, d = Math.hypot(dx, dy) || 1e-3, gap = D + 0.012 - d;
+      if (gap <= 0) continue;
+      moved = true;
+      const ux = dx / d || 0.6, uy = dy / d || 0.8, wi = pos[i].fixed ? 0 : pos[j].fixed ? 1 : 0.5, wj = pos[j].fixed ? 0 : pos[i].fixed ? 1 : 0.5;
+      pos[i].x -= ux * gap * wi; pos[i].y -= uy * gap * wi; pos[j].x += ux * gap * wj; pos[j].y += uy * gap * wj;
+    }
+    pos.forEach((p, a) => { if (p && final[a] && !p.fixed) { const r = trayRect(left(a)); p.x = Math.max(r.x0, Math.min(r.x1, p.x)); p.y = Math.max(r.y0, Math.min(r.y1, p.y)); } });
+    if (!moved) break;
+  }
+  // pieces leaving a tray: the first stretch of their trip starts from where they lie
+  agents.forEach((_, a) => {
+    if (!loose[a] || !by[a].length) return;
+    const first = by[a][0], start = loose[a];
+    first.pts = [start, ...first.pts.slice(1)];
+    refit(first);
+    loose[a] = null;
+  });
+  // pieces arriving on a tray: the last stretch ends in the heap; pieces already there on the grid slide into it
+  let mk = plan.makespan;
+  agents.forEach((_, a) => {
+    if (!final[a] || !pos[a] || pos[a].fixed) { if (!final[a]) loose[a] = null; return; }
+    const to = { x: pos[a].x, y: pos[a].y };
+    if (by[a].length) {
+      const end = by[a][by[a].length - 1];
+      end.pts = [...end.pts.slice(0, -1), to];
+      refit(end);
+      mk = Math.max(mk, end.t1);
+    } else if (!loose[a]) {
+      const s = lineSeg(a, 0, cellXY(plan.starts[a]), to);
+      plan.segs.push(s);
+      mk = Math.max(mk, s.t1);
+    }
+    loose[a] = to;
+  });
+  plan.makespan = mk;
+  // the clearance on show is the real one, heap included
+  const by2 = buildIndex(plan, agents.length), lying = loose.slice();
+  let least = Infinity;
+  for (let t = 0; t <= mk + 1e-9; t += 0.05) {
+    const P = agents.map((_, a) => by2[a].length ? agentPos(by2, a, plan.starts[a], t) : (lying[a] || cellXY(plan.starts[a])));
+    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) least = Math.min(least, Math.hypot(P[i].x - P[j].x, P[i].y - P[j].y));
+  }
+  plan.clearance = least;
+}
+// a segment whose end points changed: same start time, and its timing follows the new length
+function refit(seg) {
+  if (seg.type !== 'motion') return;
+  seg.cum = [0];
+  for (let i = 1; i < seg.pts.length; i++) seg.cum.push(seg.cum[i - 1] + Math.hypot(seg.pts[i].x - seg.pts[i - 1].x, seg.pts[i].y - seg.pts[i - 1].y));
+  seg.L = seg.cum[seg.cum.length - 1]; seg.prof = trapezoid(seg.L); seg.t1 = seg.t0 + seg.prof.T;
 }
 $('goBtn').addEventListener('click', () => request(randomKey()));
 // step through the puzzles of the chosen pool in list order (wraps around)

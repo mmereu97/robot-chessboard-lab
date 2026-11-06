@@ -54,7 +54,7 @@ A geometric consequence to keep in mind: a piece moving diagonally between two p
 
 ## Tidy trays
 
-Between positions, the pieces not in play wait on the two columns next to the board. A piece has no place of its own there. Each colour fills its back column first, then the front one, with whatever comes. Duration alone is not what makes a move look right: a planner chasing only the clock will happily make pawns step aside to let a knight squeeze in behind them, which no person would do. So:
+For the planners, the pieces not in play have a grid place on the two columns next to the board, the back column first; on screen they lie in a heap around it. Duration alone is not what makes a move look right: a planner chasing only the clock will happily make pawns step aside to let a knight squeeze in behind them, which no person would do. So:
 
 - a piece does not squeeze in behind another: the piece in front steps back and the newcomer takes its place;
 - in the Fastest reset planner, pieces that stay put reserve their squares first, and each piece that has to step aside counts as extra duration.
@@ -71,7 +71,7 @@ The trays have no fixed places. Each is wide enough for all 34 pieces (the 32 of
 
 Tested with 32 pieces going one by one to the same tray, at diameters from 0.6 to 0.9: they never overlap. When a tray is nearly full, a piece may not find room this way (between 0 and 5 of the 32, more at the largest diameter), and then it goes to a grid place on the tray instead.
 
-The planners work on a grid, so before the next position the pieces on the trays slide to places on it. A spare queen of each colour waits on the trays. When a pawn promotes, it goes off to the nearest tray and the queen comes by itself, in a straight line, with whatever is in the way stepping aside. A second promotion uses a queen captured earlier if there is one; otherwise the pawn's robot takes on the new piece.
+Between positions too, the pieces not in play lie in a heap, at random and without touching. The planners work on a grid, but a piece that stays on a tray stays where it lies, one that leaves starts from where it lies, and one that arrives ends its trip in the heap. The planners do not see the heap, so during a change of position two pieces can pass closer than their diameter, mostly on the trays; the clearance in the statistics shows it in red when that happens. Captures and promotions during a game are planned around the real positions and do not touch. A spare queen of each colour waits on the trays. When a pawn promotes, it goes off to the nearest tray and the queen comes by itself, in a straight line, with whatever is in the way stepping aside. A second promotion uses a queen captured earlier if there is one; otherwise the pawn's robot takes on the new piece.
 
 ## Captures by hand
 
