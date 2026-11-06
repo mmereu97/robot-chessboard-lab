@@ -55,6 +55,10 @@
         <p class="sub" id="sizesNote" style="margin:0 0 12px;font-size:13px;color:var(--warn)" hidden>These sizes apply to the two “inside the base” themes. Choose one under Controls to see them.</p>
         <div id="sizesRows"></div>
         <button class="btn" id="sizesReset" type="button" style="width:100%;margin-top:12px">Back to the default sizes</button>
+        <p class="lbl" style="margin-top:18px">Inside the circle</p>
+        <div class="fill-row"><label><input type="checkbox" id="fillOnw"> White pieces: fill</label><input type="color" id="fillColorw" value="#d4af37" aria-label="Fill colour for White"></div>
+        <div class="fill-row"><label><input type="checkbox" id="fillOnb"> Black pieces: fill</label><input type="color" id="fillColorb" value="#8a8a8a" aria-label="Fill colour for Black"></div>
+        <p class="sub" style="margin:6px 0 0;font-size:12.5px">Unticked, the space around the symbol stays transparent.</p>
       </div>
       <div class="panel-main" id="panelMain">
       <button class="go" id="goBtn" type="button">Random puzzle <small id="queueTag">→</small></button>

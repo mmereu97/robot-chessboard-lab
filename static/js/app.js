@@ -42,7 +42,7 @@ const INSIDE = {
   K: { enc: 0.801, cx: 0.489, cy: 0.516 }, Q: { enc: 0.961, cx: 0.499, cy: 0.469 }, B: { enc: 0.941, cx: 0.499, cy: 0.575 },
   N: { enc: 0.919, cx: 0.568, cy: 0.518 }, R: { enc: 0.901, cx: 0.499, cy: 0.551 }, P: { enc: 0.814, cx: 0.497, cy: 0.589 },
 };
-const SIZE_DEFAULT = { K: 96.9, Q: 97.1, B: 91.3, N: 83.6, R: 82.0, P: 68.4 };
+const SIZE_DEFAULT = { K: 88, Q: 92, B: 90, N: 86, R: 82, P: 73 };
 const SIZE_NAME = { K: 'King', Q: 'Queen', B: 'Bishop', N: 'Knight', R: 'Rook', P: 'Pawn' };
 const sizes = { ...SIZE_DEFAULT };
 try { const v = JSON.parse(localStorage.getItem('robo-sizes')); if (v) for (const k in sizes) if (+v[k]) sizes[k] = +v[k]; } catch (e) {}
@@ -67,6 +67,17 @@ function buildSizes() {
 }
 buildSizes();
 $('sizesReset').addEventListener('click', () => { Object.assign(sizes, SIZE_DEFAULT); try { localStorage.removeItem('robo-sizes'); } catch (e) {} buildSizes(); });
+// the space between circle and symbol: transparent, or an opaque colour for each side
+const FILL_DEFAULT = { w: { on: false, color: '#d4af37' }, b: { on: false, color: '#8a8a8a' } };
+const fill = { w: { ...FILL_DEFAULT.w }, b: { ...FILL_DEFAULT.b } };
+try { const v = JSON.parse(localStorage.getItem('robo-fill')); if (v) for (const k of ['w', 'b']) Object.assign(fill[k], v[k]); } catch (e) {}
+for (const k of ['w', 'b']) {
+  const on = $('fillOn' + k), color = $('fillColor' + k);
+  on.checked = fill[k].on; color.value = fill[k].color;
+  const save = () => { fill[k].on = on.checked; fill[k].color = color.value; try { localStorage.setItem('robo-fill', JSON.stringify(fill)); } catch (e) {} };
+  on.addEventListener('change', save);
+  color.addEventListener('input', () => { on.checked = true; save(); });
+}
 function showTab(name) {
   $('panelMain').hidden = name !== 'main'; $('panelSizes').hidden = name !== 'sizes';
   $('tabMain').classList.toggle('on', name === 'main'); $('tabSizes').classList.toggle('on', name === 'sizes');
@@ -411,6 +422,8 @@ function drawPieceUp(ag, p, lifted) {
   if (insideBase(theme()) && img && img.complete && img.naturalWidth) {
     const D = diam(), T = ag.t.toUpperCase(), f = INSIDE[T], size = D * sizes[T] / 100 / f.enc;
     ctx.save();
+    const inside = fill[ag.white ? 'w' : 'b'];
+    if (inside.on) { ctx.fillStyle = inside.color; ctx.beginPath(); ctx.arc(x, y, D / 2, 0, 7); ctx.fill(); }
     if (theme() === 'ring') { ctx.strokeStyle = tok['--muted']; ctx.globalAlpha = 0.55; ctx.lineWidth = 0.015; ctx.beginPath(); ctx.arc(x, y, D / 2, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
     if (lifted) { ctx.shadowColor = tok['--shadow']; ctx.shadowBlur = 0.12 * S; ctx.shadowOffsetY = 0.04 * S; }
     ctx.drawImage(img, x - size * f.cx, y - size * f.cy, size, size);
