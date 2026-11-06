@@ -475,10 +475,8 @@ function botPuzzle() {
   const elo = Math.max(500, Math.min(3000, Math.round(+$('botElo').value) || 800)), c = $('botColor').value;
   const human = c === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : c;
   $('botElo').value = elo;
-  try { localStorage.setItem('robo-bot', JSON.stringify({ elo, c })); } catch (e) {}
   return { name: 'Playing Stockfish', desc: `Elo ${elo}. You play ${human === 'w' ? 'White' : 'Black'}.`, fen: PUZZLES[0].fen, bot: { elo, human } };
 }
-try { const v = JSON.parse(localStorage.getItem('robo-bot')); if (v) { $('botElo').value = v.elo; $('botColor').value = v.c; } } catch (e) {}
 $('botBtn').addEventListener('click', () => request('bot'));
 function startBotGame(bot) {
   const g = game;
@@ -840,5 +838,6 @@ applyThemeDiameter();
 resize();
 document.fonts && document.fonts.ready.then(() => draw());
 requestAnimationFrame(frame);
-// on opening: a game against Stockfish
-setTimeout(() => { if (!anim && !last) request('bot'); }, 300);
+// on opening, always the same: the board ready for a game against Stockfish at Elo 800, with you as White
+$('botElo').value = 800; $('botColor').value = 'w';
+setTimeout(() => request('bot'), 300);
