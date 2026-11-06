@@ -6,7 +6,7 @@
 <title>Robot Chessboard Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="css/style.css?v=20261107a">
+<link rel="stylesheet" href="css/style.css?v=20261107b">
 </head>
 <body>
 <div class="wrap">
@@ -91,12 +91,14 @@
         <label style="display:block;margin-top:8px;font-size:13px"><input type="checkbox" id="botFight"> A rook or more down, it stops making mistakes</label>
       </div>
       <div>
+        <div id="poolWrap">
         <p class="lbl">Random from</p>
         <select id="poolSel" aria-label="Random pool">
           <option value="all">All positions</option>
           <option value="m2">Mate in two only</option>
           <option value="classic">Classic positions only</option>
         </select>
+        </div>
         <p class="lbl" style="margin-top:14px">Or pick one</p>
         <select id="pzSel" aria-label="Pick a puzzle"></select>
       </div>
@@ -163,11 +165,11 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=20261107a"></script>
-<script src="js/puzzles.js?v=20261107a"></script>
+<script src="js/engine.js?v=20261107b"></script>
+<script src="js/puzzles.js?v=20261107b"></script>
 <script>if (/^(localhost$|127\.)/.test(location.hostname)) document.write('<script src="js/puzzles-private.js"><\/script>');</script>
-<script src="js/chess.js?v=20261107a"></script>
-<script src="js/pieces.js?v=20261107a"></script>
-<script src="js/app.js?v=20261107a"></script>
+<script src="js/chess.js?v=20261107b"></script>
+<script src="js/pieces.js?v=20261107b"></script>
+<script src="js/app.js?v=20261107b"></script>
 </body>
 </html>

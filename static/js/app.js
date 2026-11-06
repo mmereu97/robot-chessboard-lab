@@ -88,20 +88,20 @@ $('tabSizes').addEventListener('click', () => showTab('sizes'));
 try { if (localStorage.getItem('robo-tab') === 'sizes') showTab('sizes'); } catch (e) {}
 
 // --- control UI ---
-const sel = $('pzSel');
+const sel = $('pzSel'), mineOnly = PUZZLES.some(p => p.mine);
 {
-  const groups = { classic: 'Classic positions', m2: 'Mate in two' }, og = {};
-  if (PUZZLES.some(p => p.mine)) {   // from the private file, when there is one
-    groups.mine = 'My puzzles';
-    const o = document.createElement('option'); o.value = 'mine'; o.textContent = 'My puzzles only'; $('poolSel').appendChild(o);
-  }
+  // with a private file only its puzzles are on offer, by chapter; the starting position stays for Reset and for games
+  const groups = mineOnly ? {} : { classic: 'Classic positions', m2: 'Mate in two' }, og = {};
+  const groupOf = p => mineOnly ? p.chapter : p.set || 'classic';
+  if (mineOnly) PUZZLES.forEach(p => { if (p.mine) groups[p.chapter] = p.chapter; });
   for (const g in groups) { og[g] = document.createElement('optgroup'); og[g].label = groups[g]; sel.appendChild(og[g]); }
-  PUZZLES.forEach((p, i) => { const o = document.createElement('option'); o.value = 'p' + i; o.textContent = p.name; og[p.mine ? 'mine' : p.set || 'classic'].appendChild(o); });
-  const o = document.createElement('option'); o.value = 'rand'; o.textContent = 'Random generated position'; og.classic.appendChild(o);
+  PUZZLES.forEach((p, i) => { if (mineOnly && !p.mine) return; const o = document.createElement('option'); o.value = 'p' + i; o.textContent = p.name; og[groupOf(p)].appendChild(o); });
+  if (mineOnly) $('poolWrap').hidden = true;
+  else { const o = document.createElement('option'); o.value = 'rand'; o.textContent = 'Random generated position'; og.classic.appendChild(o); }
 }
 try { const v = localStorage.getItem('robo-pool'); if (v) $('poolSel').value = v; } catch (e) {}
 if (!$('poolSel').value) $('poolSel').value = 'all';
-const inPool = (p, pool) => pool === 'all' || (pool === 'mine' ? p.mine : !p.mine && (p.set || 'classic') === pool);
+const inPool = (p, pool) => mineOnly ? p.mine : pool === 'all' || (p.set || 'classic') === pool;
 $('poolSel').addEventListener('change', () => { try { localStorage.setItem('robo-pool', $('poolSel').value); } catch (e) {} });
 const algosEl = $('algos');
 ['fast', 'nudge', 'ca', 'pibt', 'seq', 'naive'].map(k => [k, ALGOS[k]]).forEach(([k, A]) => {
@@ -127,7 +127,7 @@ function puzzleFor(key) {
 }
 function randomKey() {
   const pool = $('poolSel').value;
-  if (pool !== 'm2' && pool !== 'mine' && Math.random() < (pool === 'all' ? 0.08 : 0.15)) return 'rand';
+  if (!mineOnly && pool !== 'm2' && Math.random() < (pool === 'all' ? 0.08 : 0.15)) return 'rand';
   const ids = PUZZLES.map((p, i) => i).filter(i => inPool(PUZZLES[i], pool));
   let k; do { k = 'p' + ids[Math.floor(Math.random() * ids.length)]; } while (k === currentKey && ids.length > 1);
   return k;
