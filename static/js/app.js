@@ -5,6 +5,7 @@ const cv = $('cv'), ctx = cv.getContext('2d');
 const GLYPH = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
 const ALGO_META = {
   fast: { tag: 'parallel', em: 'Shortest total time: bottleneck matching, many priority orders, exact geometry.' },
+  nudge: { tag: 'parallel', em: 'Same matching; pieces near a route slide aside just enough for the circle to pass, then return.' },
   ca: { tag: 'parallel', em: 'Space-time planning with reservations; strict square rules.' },
   pibt: { tag: 'parallel', em: 'Step-by-step decisions with pushing and priority inheritance.' },
   seq: { tag: '1 magnet', em: 'Optimal matching, magnet-friendly order, smooth A* paths.' },
@@ -51,7 +52,7 @@ const sel = $('pzSel');
 try { const v = localStorage.getItem('robo-pool'); if (v) $('poolSel').value = v; } catch (e) {}
 $('poolSel').addEventListener('change', () => { try { localStorage.setItem('robo-pool', $('poolSel').value); } catch (e) {} });
 const algosEl = $('algos');
-['fast', 'ca', 'pibt', 'seq', 'naive'].map(k => [k, ALGOS[k]]).forEach(([k, A]) => {
+['fast', 'nudge', 'ca', 'pibt', 'seq', 'naive'].map(k => [k, ALGOS[k]]).forEach(([k, A]) => {
   const l = document.createElement('label'); l.className = 'algo';
   l.innerHTML = `<input type="radio" name="algo" id="algo-${k}" value="${k}"${k === algo ? ' checked' : ''}><strong>${A.name}<span class="tag">${ALGO_META[k].tag}</span></strong><em>${ALGO_META[k].em}</em>`;
   algosEl.appendChild(l);
@@ -99,7 +100,7 @@ function launch(key, pz, fromStarts) {
     $('replayBtn').disabled = false; $('cmpBtn').disabled = false;
     renderStats();
     lastCmp = null; $('cmpTable').hidden = true; $('cmpEmpty').hidden = false;
-    $('cmpEmpty').textContent = 'Press “Compare planners” to run all five on this transition.';
+    $('cmpEmpty').textContent = 'Press “Compare planners” to run all six on this transition.';
   }, 20);
 }
 $('goBtn').addEventListener('click', () => request(randomKey()));
@@ -152,7 +153,7 @@ $('cmpBtn').addEventListener('click', () => {
   if (!last) return;
   $('cmpEmpty').hidden = false; $('cmpTable').hidden = true; $('cmpEmpty').textContent = 'Running all five planners…';
   setTimeout(() => {
-    const rows = ['fast', 'ca', 'pibt', 'seq', 'naive'].map(k => ({ k, p: planTransition(k, agents, last.starts, last.pz.fen, opt(), last.carStart) }));
+    const rows = ['fast', 'nudge', 'ca', 'pibt', 'seq', 'naive'].map(k => ({ k, p: planTransition(k, agents, last.starts, last.pz.fen, opt(), last.carStart) }));
     lastCmp = rows; renderCmp(rows);
   }, 30);
 });

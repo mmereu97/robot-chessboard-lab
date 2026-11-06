@@ -15,6 +15,7 @@ The idea came from watching a commercial robotic board, the Chessnut Move, set u
 | Planner | Idea |
 |---|---|
 | **Fastest reset** (default) | Bottleneck assignment, so the longest single trip is as short as possible; then many priority orders within about a second, moving the piece that arrives last to the front; moves checked with exact geometry; pieces with nowhere to go are left alone |
+| **Pieces step aside** | Same matching, no grid: pieces are circles. Each trip takes the route that disturbs least; a piece too close to it slides off by the least that lets the circle pass and returns afterwards. Trips run together whenever they collide with nothing already under way. |
 | **Cooperative A\*** | Space-time planning with reservations, one greedy priority order, strict square rules |
 | **PIBT** | No long-term plan: at each step every piece moves towards its target, pushing and passing on priority when needed |
 | **Optimized sequential** | One magnet under the board: Hungarian assignment, an order that keeps empty magnet travel short, A\* with diagonals and rounded corners |
@@ -36,6 +37,8 @@ All five planners on the same chain of 25 changes of position (every position in
 - The default planner finishes about 30% above the lower bound, roughly 21 times faster than moving one piece at a time.
 - Every plan completed, and no two pieces came closer than their diameter. The fallbacks are visible in the app: the two sequential planners can finish with serialized PIBT when their heuristic loops.
 - The 12 mate-in-two puzzles were checked with the app's own solver: each has exactly one key move.
+
+Pieces step aside was added later and measured on the same chain with the same diameter: a mean of **4.0 s**, against 2.8 s for Fastest reset, with about 3 pieces per change stepping aside, by 0.07 of a square on average and 0.41 at most, and the circles never closer than their diameter. On 80 random changes at a diameter of 0.78 it could not place a trip 3 times; it then uses Fastest reset and the comparison table marks it as a fallback. Above a diameter of about 0.84 this happens more often, because a row has little room left to open.
 
 Compute times are from one run in headless Chromium and will differ on your machine. The Fastest reset planner has a time budget and randomised orders, so its numbers vary slightly between runs.
 

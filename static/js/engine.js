@@ -823,6 +823,246 @@ function minClearance(plan, starts) {
   return best;
 }
 
+// ---------- 6: pieces step aside, by the least that lets a moving piece through ----------
+// No grid here: positions are continuous and pieces are circles of the chosen diameter. Each trip gets
+// a route that disturbs as little as possible. Pieces too close to the route slide off it just far
+// enough for the circle to pass, moving their neighbours only if they touch them, and go home once it
+// has passed. A trip starts as soon as it collides with nothing already under way.
+function planNudge(starts, goals, opt) {
+  const n = starts.length, DIAM = opt.diam || 0.76, diag = opt.diag;
+  const R = DIAM + 0.01, HARD = DIAM + 0.004, TICK = 0.05, TRY = 0.25;
+  const minX = DIAM / 2, maxX = W - DIAM / 2, minY = DIAM / 2, maxY = H - DIAM / 2;
+  const LX = 2 * W + 1, LY = 2 * H + 1, node = (i, j) => j * LX + i;
+  const place = starts.slice();                 // where each piece is once everything planned so far is done
+  const pos = a => cellXY(place[a]);
+
+  // A* on a half-square lattice; coming close to a piece costs what that piece would have to move
+  function route(a, goal) {
+    const bodies = []; for (let b = 0; b < n; b++) if (b !== a) bodies.push(pos(b));
+    const cost = (p, q) => {
+      const L = Math.hypot(q.x - p.x, q.y - p.y), steps = Math.max(1, Math.ceil(L / 0.2));
+      let push = 0;
+      for (let k = 0; k < steps; k++) {
+        const u = (k + 0.5) / steps, x = p.x + (q.x - p.x) * u, y = p.y + (q.y - p.y) * u;
+        for (const o of bodies) { const d = Math.hypot(o.x - x, o.y - y); if (d < R) push += R - d; }
+      }
+      return L * (1 + 4 * push / steps);
+    };
+    const s = pos(a), g = cellXY(goal), S0 = node(2 * s.x, 2 * s.y), G0 = node(2 * g.x, 2 * g.y);
+    const best = new Float64Array(LX * LY).fill(Infinity), prev = new Int32Array(LX * LY).fill(-1), heap = new Heap();
+    const est = (x, y) => Math.hypot(g.x - x, g.y - y);
+    best[S0] = 0; heap.push({ f: est(s.x, s.y), st: S0 });
+    while (heap.size) {
+      const { f, st } = heap.pop();
+      if (st === G0) break;
+      const j = (st / LX) | 0, i = st % LX, p = { x: i / 2, y: j / 2 };
+      if (f > best[st] + est(p.x, p.y) + 1e-9) continue;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        if ((!di && !dj) || (!diag && di && dj)) continue;
+        const q = { x: (i + di) / 2, y: (j + dj) / 2 };
+        if (q.x < minX || q.x > maxX || q.y < minY || q.y > maxY) continue;
+        const nx = node(i + di, j + dj), c = best[st] + cost(p, q);
+        if (c < best[nx] - 1e-9) { best[nx] = c; prev[nx] = st; heap.push({ f: c + est(q.x, q.y), st: nx }); }
+      }
+    }
+    const way = [];
+    for (let x = G0; x >= 0; x = prev[x]) way.push({ x: (x % LX) / 2, y: ((x / LX) | 0) / 2 });
+    way.reverse();
+    // straighten where that disturbs no more, then sample and round the corners
+    if (diag) for (let i = 0; i + 2 < way.length; i++) {
+      while (i + 2 < way.length && cost(way[i], way[i + 2]) <= cost(way[i], way[i + 1]) + cost(way[i + 1], way[i + 2]) + 1e-9) way.splice(i + 1, 1);
+    }
+    const pts = [way[0]];
+    for (let i = 1; i < way.length; i++) {
+      const p = way[i - 1], q = way[i], L = Math.hypot(q.x - p.x, q.y - p.y), m = Math.max(1, Math.round(L / 0.05));
+      for (let k = 1; k <= m; k++) pts.push({ x: p.x + (q.x - p.x) * k / m, y: p.y + (q.y - p.y) * k / m });
+    }
+    return pts.map((p, i) => {
+      const w = Math.min(4, i, pts.length - 1 - i); let x = 0, y = 0;
+      for (let k = i - w; k <= i + w; k++) { x += pts[k].x; y += pts[k].y; }
+      return { x: x / (2 * w + 1), y: y / (2 * w + 1) };
+    });
+  }
+
+  // where every other piece has to stand so that the circle fits along the route: the least move from
+  // home that keeps it clear of the route, of the walls and of its neighbours
+  function makeRoom(a, pts) {
+    const X = []; for (let b = 0; b < n; b++) X.push(pos(b));
+    const closest = c => {
+      let bd = Infinity, bi = 0;
+      for (let i = 0; i < pts.length; i += 2) { const d = Math.hypot(pts[i].x - c.x, pts[i].y - c.y); if (d < bd) { bd = d; bi = i; } }
+      return { d: bd, i: bi };
+    };
+    for (let it = 0; it < 400; it++) {
+      let worst = 0;
+      for (let j = 0; j < n; j++) {
+        if (j === a) continue;
+        const { d, i } = closest(X[j]);
+        if (d >= R) continue;
+        worst = Math.max(worst, R - d - 0.008);
+        let ux, uy;
+        if (d > 0.02) { ux = (X[j].x - pts[i].x) / d; uy = (X[j].y - pts[i].y) / d; }
+        else {
+          const k = Math.min(pts.length - 1, i + 2), l = Math.max(0, i - 2), tx = pts[k].x - pts[l].x, ty = pts[k].y - pts[l].y, tl = Math.hypot(tx, ty) || 1;
+          ux = -ty / tl; uy = tx / tl;
+          const room = o => { let q = 0; for (let b = 0; b < n; b++) if (b !== j && b !== a) { const e = Math.hypot(X[b].x - X[j].x - o * ux, X[b].y - X[j].y - o * uy); if (e < 1.2) q += 1.2 - e; } return q; };
+          if (room(1) > room(-1)) { ux = -ux; uy = -uy; }
+        }
+        X[j] = { x: X[j].x + ux * (R - d), y: X[j].y + uy * (R - d) };
+        // still there after a while: it is held by a wall or a full row, so the route bends away from it
+        if (it >= 40) {
+          const reach = 16, bend = (R - d) * 0.25;
+          for (let k = Math.max(1, i - reach); k <= Math.min(pts.length - 2, i + reach); k++) {
+            const w = (1 - Math.abs(k - i) / (reach + 1)) * Math.min(1, k / 10, (pts.length - 1 - k) / 10);
+            pts[k] = { x: Math.max(minX, Math.min(maxX, pts[k].x - ux * bend * w)), y: Math.max(minY, Math.min(maxY, pts[k].y - uy * bend * w)) };
+          }
+        }
+      }
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+        if (i === a || j === a) continue;
+        const dx = X[j].x - X[i].x, dy = X[j].y - X[i].y;
+        if (Math.abs(dx) >= HARD || Math.abs(dy) >= HARD) continue;
+        const d = Math.hypot(dx, dy);
+        if (d >= HARD) continue;
+        worst = Math.max(worst, HARD - d - 0.003);
+        const ux = d > 1e-6 ? dx / d : 1, uy = d > 1e-6 ? dy / d : 0, gap = (HARD - d) / 2;
+        X[i] = { x: X[i].x - ux * gap, y: X[i].y - uy * gap }; X[j] = { x: X[j].x + ux * gap, y: X[j].y + uy * gap };
+      }
+      for (let j = 0; j < n; j++) if (j !== a) X[j] = { x: Math.max(minX, Math.min(maxX, X[j].x)), y: Math.max(minY, Math.min(maxY, X[j].y)) };
+      if (worst <= 0) return { X, closest };
+    }
+    return null;
+  }
+
+  const by = Array.from({ length: n }, () => []);   // committed motion of each piece, in time order
+  const busyUntil = new Float64Array(n);
+  const at = (a, t) => {
+    const l = by[a];
+    if (!l.length || t <= l[0].t0) return l.length ? l[0].pts[0] : pos0[a];
+    let s = l[0]; for (const x of l) { if (x.t0 <= t) s = x; else break; }
+    return segPos(s, t);
+  };
+  const pos0 = starts.map(cellXY);
+  let temps = 0, moved = new Set(), most = 0, nudgeSum = 0, nudgeN = 0;
+
+  // one trip: the piece, the pieces that make way, and when each of them moves
+  function trip(a, goal, wide = false) {
+    const pts = route(a, goal), room = makeRoom(a, pts);
+    if (!room) return null;
+    const main = motionSeg(a, 0, pts), times = [];
+    const when = arc => { let lo = 0, hi = main.prof.T; for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (main.prof.s(m) < arc) lo = m; else hi = m; } return hi; };
+    const moves = [];
+    for (let j = 0; j < n; j++) {
+      if (j === a) continue;
+      const h = pos(j), y = room.X[j], off = Math.hypot(y.x - h.x, y.y - h.y);
+      if (off < 0.004) continue;
+      // the stretch of the route during which it must not be at home or on its way
+      let first = -1, last = -1;
+      for (let i = 0; i < pts.length; i += 2) {
+        let close = false;
+        for (let u = 0; u <= 1 && !close; u += 0.25) if (Math.hypot(pts[i].x - (h.x + (y.x - h.x) * u), pts[i].y - (h.y + (y.y - h.y) * u)) < R + 0.02) close = true;
+        if (close) { if (first < 0) first = i; last = i; }
+      }
+      moves.push({ j, h, y, off, first, last, dur: trapezoid(off).T, t0: Infinity, t1: -Infinity });
+    }
+    for (const m of moves) if (m.first >= 0) {
+      m.t0 = when(main.cum[m.first]) - m.dur; m.t1 = when(main.cum[m.last]);
+    }
+    // a piece standing where a neighbour has to go leaves before it and comes back after it;
+    // two that each stand where the other goes move together
+    for (let it = 0; it < moves.length + 1; it++) for (const p of moves) for (const q of moves) {
+      if (p === q || !isFinite(p.t0) || Math.hypot(p.y.x - q.h.x, p.y.y - q.h.y) >= HARD) continue;
+      const both = Math.hypot(q.y.x - p.h.x, q.y.y - p.h.y) < HARD;
+      q.t0 = Math.min(q.t0, both ? p.t0 : p.t0 - q.dur);
+      q.t1 = Math.max(q.t1, both ? p.t1 : p.t1 + p.dur);
+    }
+    for (const m of moves) if (!isFinite(m.t0)) { m.t0 = 0; m.t1 = main.prof.T; }
+    // the safe way, if the close timing does not work out: everyone is aside before the piece sets off
+    if (wide) for (const m of moves) { m.t0 = -m.dur; m.t1 = main.prof.T; }
+    const lead = Math.max(0, ...moves.map(m => -m.t0));
+    const span = Math.max(main.prof.T, ...moves.map(m => m.t1 + m.dur)) + lead;
+    return { a, goal, pts, main, moves, lead, span };
+  }
+  function motionSeg(a, t0, pts) {
+    const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+    const L = cum[cum.length - 1], prof = trapezoid(L);
+    return { a, type: 'motion', t0, t1: t0 + prof.T, pts, cum, L, prof };
+  }
+  // the trip's segments if it starts at time t
+  function build(tr, t) {
+    const segs = [{ ...tr.main, t0: t + tr.lead, t1: t + tr.lead + tr.main.prof.T }];
+    for (const m of tr.moves) {
+      const out = t + tr.lead + m.t0, back = t + tr.lead + m.t1;
+      segs.push(motionSeg(m.j, out, [m.h, m.y]), motionSeg(m.j, Math.max(back, out + m.dur), [m.y, m.h]));
+    }
+    return segs;
+  }
+  function fits(tr, t) {
+    if (t < busyUntil[tr.a]) return false;
+    for (const m of tr.moves) if (t + tr.lead + m.t0 < busyUntil[m.j] - 1e-9) return false;
+    const segs = build(tr, t), mine = new Map();
+    for (const s of segs) { if (!mine.has(s.a)) mine.set(s.a, []); mine.get(s.a).push(s); }
+    const end = Math.max(...segs.map(x => x.t1), ...busyUntil) + 0.05;   // what is already under way must not run into it later
+    // before its part in this trip a piece is still doing whatever was planned for it earlier
+    const myAt = (a, tt) => { const l = mine.get(a); let s = null; for (const x of l) if (x.t0 <= tt) s = x; return s ? segPos(s, tt) : at(a, tt); };
+    const ids = [...mine.keys()], others = []; for (let b = 0; b < n; b++) if (!mine.has(b)) others.push(b);
+    for (let tt = t; tt <= end; tt += TICK) {
+      const P = ids.map(a => myAt(a, tt));
+      for (let i = 0; i < ids.length; i++) {
+        for (let k = i + 1; k < ids.length; k++) if (Math.hypot(P[i].x - P[k].x, P[i].y - P[k].y) < DIAM) return false;
+        for (const b of others) { const q = at(b, tt); if (Math.abs(q.x - P[i].x) < DIAM && Math.abs(q.y - P[i].y) < DIAM && Math.hypot(q.x - P[i].x, q.y - P[i].y) < DIAM) return false; }
+      }
+    }
+    return true;
+  }
+  function commit(tr, t) {
+    for (const s of build(tr, t)) { by[s.a].push(s); busyUntil[s.a] = Math.max(busyUntil[s.a], s.t1); }
+    by.forEach(l => l.sort((x, y) => x.t0 - y.t0));
+    place[tr.a] = tr.goal;
+    for (const m of tr.moves) { moved.add(m.j); if (starts[m.j] === goals[m.j]) { most = Math.max(most, m.off); nudgeSum += m.off; nudgeN++; } }
+  }
+  // the earliest start that collides with nothing
+  function earliest(tr) {
+    const last = Math.max(0, ...busyUntil) + 0.1;
+    for (let t = 0; t <= last + TRY; t += TRY) if (fits(tr, t)) return t;
+    return -1;
+  }
+  function bestTrip(a, goal) {
+    let tr = trip(a, goal), t = tr ? earliest(tr) : -1;
+    if (tr && t < 0) { tr = trip(a, goal, true); t = tr ? earliest(tr) : -1; }
+    return t < 0 ? null : { tr, t, end: t + tr.span };
+  }
+  const taken = c => place.includes(c);
+  let pending = []; starts.forEach((c, a) => { if (c !== goals[a]) pending.push(a); });
+  const dist = a => octile(place[a], goals[a]);
+  const TRIES = 8;
+  while (pending.length) {
+    const ready = pending.filter(a => !taken(goals[a])).sort((x, y) => dist(y) - dist(x)).slice(0, TRIES);
+    if (ready.length) {
+      // of the trips that could go next, the one that is done first
+      let best = null, who = -1;
+      for (const a of ready) { const c = bestTrip(a, goals[a]); if (c && (!best || c.end < best.end)) { best = c; who = a; } }
+      if (!best) return { ok: false, note: 'A piece could not get through' };
+      commit(best.tr, best.t);
+      pending = pending.filter(x => x !== who);
+      continue;
+    }
+    // everyone waits for someone else's square: one of them makes way on a free place nearby
+    const a = pending[0]; let spot = -1, bd = Infinity;
+    for (let c = 0; c < N; c++) if (!taken(c) && !goals.includes(c)) { const d = octile(place[a], c); if (d < bd) { bd = d; spot = c; } }
+    if (spot < 0) return { ok: false, note: 'No free place to make way' };
+    const c = bestTrip(a, spot);
+    if (!c) return { ok: false, note: 'A piece could not get through' };
+    commit(c.tr, c.t);
+    temps++;
+  }
+  const segs = by.flat();
+  if (minClearance({ segs, makespan: Math.max(...busyUntil) }, starts) < DIAM - 1e-3) return { ok: false, note: 'Two pieces would have touched' };
+  let total = 0, mk = 0;
+  for (const s of segs) { total += s.L; mk = Math.max(mk, s.t1); }
+  return { ok: true, segs, car: null, makespan: mk, dist: total, carEmpty: 0, moves: new Set(segs.map(s => s.a)).size, temps, waits: 0, parallel: true, nudged: [...moved].filter(a => starts[a] === goals[a]).length, most, nudgeAvg: nudgeN ? nudgeSum / nudgeN : 0 };
+}
+
 const ALGOS = {
   naive: { name: 'Naive, one piece at a time', short: 'Naive', run: (s, g, o, car) => planSequential(s, g, o, car, true), assign: 'naive' },
   seq: { name: 'Optimized sequential', short: 'Sequential', run: (s, g, o, car) => planSequential(s, g, o, car, false), assign: 'hungarian' },
@@ -833,6 +1073,13 @@ const ALGOS = {
     if (!a.ok) { b.note = 'Optimizer found no CA* plan; using PIBT'; return b; }
     if (b.ok && b.makespan < a.makespan) { b.iters = a.iters; b.note = 'PIBT beat the optimized CA* plan this time'; return b; }
     return a;
+  }, assign: 'bottleneck' },
+  nudge: { name: 'Pieces step aside', short: 'Step aside', run: (s, g, o) => {
+    const a = planNudge(s, g, o);
+    if (a.ok) return a;
+    const b = ALGOS.fast.run(s, g, o);
+    b.note = (a.note || 'Pieces could not step aside') + '; used Fastest reset';
+    return b;
   }, assign: 'bottleneck' },
 };
 
@@ -851,7 +1098,7 @@ function planTransition(algoKey, agents, starts, fen, opt, carStart) {
   return plan;
 }
 
-if (typeof module !== 'undefined') module.exports = { bottleneckValue, planTransition, targetConfig, ALGOS, FULL_SET, parseFEN, idx, N };
+if (typeof module !== 'undefined') module.exports = { bottleneckValue, planTransition, targetConfig, ALGOS, FULL_SET, parseFEN, idx, N, minClearance, planNudge };
 
 // plan a transition where every piece already has its exact target (used for game moves)
 function planFixed(algoKey, starts, goals, opt, carStart) {
