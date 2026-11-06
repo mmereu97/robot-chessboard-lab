@@ -173,20 +173,27 @@ function pileUp(plan) {
     const c = cellXY(plan.goals[a]);
     return { x: c.x + 0.8 * gauss(), y: 4 + (c.y - 4) * 0.8 + 0.5 * gauss() };
   });
-  // nobody overlaps: arrivals push each other apart and go around those already lying there
-  for (let it = 0; it < 300; it++) {
-    let moved = false;
-    for (let i = 0; i < pos.length; i++) for (let j = i + 1; j < pos.length; j++) {
-      if (!pos[i] || !pos[j] || !final[i] || !final[j] || left(i) !== left(j)) continue;
-      const dx = pos[j].x - pos[i].x, dy = pos[j].y - pos[i].y, d = Math.hypot(dx, dy) || 1e-3, gap = D + 0.012 - d;
-      if (gap <= 0) continue;
-      moved = true;
-      const ux = dx / d || 0.6, uy = dy / d || 0.8, wi = pos[i].fixed ? 0 : pos[j].fixed ? 1 : 0.5, wj = pos[j].fixed ? 0 : pos[i].fixed ? 1 : 0.5;
-      pos[i].x -= ux * gap * wi; pos[i].y -= uy * gap * wi; pos[j].x += ux * gap * wj; pos[j].y += uy * gap * wj;
+  // nobody overlaps: those lying there keep their place if they have room, and each arrival takes
+  // the free spot nearest to where it would fall
+  const NEED = D + 0.012, placed = { true: [], false: [] };
+  const roomAt = (q, list) => list.every(o => Math.hypot(o.x - q.x, o.y - q.y) >= NEED);
+  agents.forEach((_, a) => {
+    if (!pos[a] || !pos[a].fixed || !final[a]) return;
+    if (roomAt(pos[a], placed[left(a)])) placed[left(a)].push(pos[a]); else pos[a].fixed = false;
+  });
+  agents.forEach((_, a) => {
+    if (!pos[a] || pos[a].fixed || !final[a]) return;
+    const r = trayRect(left(a)), list = placed[left(a)], want = { x: Math.max(r.x0, Math.min(r.x1, pos[a].x)), y: Math.max(r.y0, Math.min(r.y1, pos[a].y)) };
+    let best = null, bd = Infinity;
+    if (roomAt(want, list)) best = want;
+    else for (let x = r.x0; x <= r.x1 + 1e-9; x += D / 8) for (let y = r.y0; y <= r.y1 + 1e-9; y += D / 8) {
+      const d = Math.hypot(x - want.x, y - want.y);
+      if (d < bd && roomAt({ x, y }, list)) { bd = d; best = { x, y }; }
     }
-    pos.forEach((p, a) => { if (p && final[a] && !p.fixed) { const r = trayRect(left(a)); p.x = Math.max(r.x0, Math.min(r.x1, p.x)); p.y = Math.max(r.y0, Math.min(r.y1, p.y)); } });
-    if (!moved) break;
-  }
+    if (!best) { best = want; console.warn('no room on the tray for piece', a); }
+    pos[a].x = best.x; pos[a].y = best.y;
+    list.push(pos[a]);
+  });
   // pieces leaving a tray: the first stretch of their trip starts from where they lie
   agents.forEach((_, a) => {
     if (!loose[a] || !by[a].length) return;
@@ -205,8 +212,8 @@ function pileUp(plan) {
       end.pts = [...end.pts.slice(0, -1), to];
       refit(end);
       mk = Math.max(mk, end.t1);
-    } else if (!loose[a]) {
-      const s = lineSeg(a, 0, cellXY(plan.starts[a]), to);
+    } else {
+      const s = lineSeg(a, 0, loose[a] || cellXY(plan.starts[a]), to);
       plan.segs.push(s);
       mk = Math.max(mk, s.t1);
     }

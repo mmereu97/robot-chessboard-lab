@@ -71,13 +71,16 @@ function hungarian(a) {
 }
 
 // ---------- configurații ----------
-// Trays: white on the left, black on the right. No piece has a place of its own: each tray fills
-// its back column (away from the board) first, then its front column, with whatever comes.
+// No piece has a place of its own. A piece not in play goes to the tray on its side of the board: files a-d
+// to the left, e-h to the right; one already on a tray stays on it. Each tray fills its two columns next to
+// the board first, the farther one before the nearer, and the outer two only when those are full.
+const column = col => [...Array(8).keys()].map(r => idx(col, r));
 const TRAY_CELLS = {
-  // between positions the pieces not in play wait on the two columns next to the board: first the farther one
-  white: [...Array(8).keys()].map(r => idx(TRAY_W - 2, r)).concat([...Array(8).keys()].map(r => idx(TRAY_W - 1, r))),
-  black: [...Array(8).keys()].map(r => idx(W - TRAY_W + 1, r)).concat([...Array(8).keys()].map(r => idx(W - TRAY_W, r))),
+  left: [TRAY_W - 2, TRAY_W - 1, TRAY_W - 3, TRAY_W - 4].flatMap(column),
+  right: [W - TRAY_W + 1, W - TRAY_W, W - TRAY_W + 2, W - TRAY_W + 3].flatMap(column),
 };
+const onLeft = c => cx(c) < W / 2;
+const WRONG_TRAY = 1000;   // far above any distance: a leftover piece never crosses to the other tray
 // the 32 pieces of a game and a spare queen of each colour, waiting on the trays for a promotion
 const FULL_SET = 'KQRRBBNNPPPPPPPPkqrrbbnnppppppppQq'.split('');
 
@@ -109,7 +112,7 @@ function fillTray(cfg, types, cells, agents, starts) {
       const behind = blocker !== undefined && blocker !== a && starts[a] !== c;
       d = Math.min(d, octile(starts[a], c) + (behind ? BEHIND : 0));
     });
-    return d + (d > 0 ? 0.35 : 0) + (i >= 8 ? FRONT : 0);
+    return d + (d > 0 ? 0.35 : 0) + (i >= 16 ? 2 * FRONT : i >= 8 ? FRONT : 0);
   });
   const m = types.map(cost);
   while (m.length < cells.length) m.push(new Array(cells.length).fill(0));   // empty places
@@ -117,6 +120,23 @@ function fillTray(cfg, types, cells, agents, starts) {
   types.forEach((t, i) => cfg.set(cells[res[i]], t));
 }
 
+// Which pieces of each type are left over, once the position has taken the closest ones:
+// a piece on a tray can stay as it is, one on the board has at least the way to the nearer tray to go.
+function leftovers(board, agents, starts) {
+  const out = new Set(), wanted = {};
+  for (const [c, t] of board) (wanted[t] = wanted[t] || []).push(c);
+  const parking = c => { const f = cx(c) - TRAY_W; return f < 0 || f > 7 ? 0 : Math.min(f + 1, 8 - f) + 0.35; };
+  [...new Set(agents.map(ag => ag.t))].forEach(t => {
+    const ag = agents.map((_, a) => a).filter(a => agents[a].t === t), tg = wanted[t] || [];
+    const res = hungarian(ag.map(a => ag.map((_, j) => {
+      if (j >= tg.length) return parking(starts[a]);
+      const d = octile(starts[a], tg[j]);
+      return d + (d > 0 ? 0.35 : 0);
+    })));
+    ag.forEach((a, i) => { if (res[i] >= tg.length) out.add(a); });
+  });
+  return out;
+}
 // ținta completă: celulă -> tip pentru toate cele 32 de piese
 function targetConfig(fen, agents, starts) {
   const board = parseFEN(fen);
@@ -124,16 +144,19 @@ function targetConfig(fen, agents, starts) {
   FULL_SET.forEach(t => need[t] = (need[t] || 0) + 1);
   const cfg = new Map();
   for (const [c, t] of board) { cfg.set(c, t); need[t]--; }
-  const left = { white: [], black: [] };
-  for (const t in need) {
-    if (need[t] < 0) throw new Error('Prea multe piese de tip ' + t);
-    for (let i = 0; i < need[t]; i++) left[t === t.toUpperCase() ? 'white' : 'black'].push(t);
-  }
-  fillTray(cfg, left.white, TRAY_CELLS.white, agents, starts);
-  fillTray(cfg, left.black, TRAY_CELLS.black, agents, starts);
+  const sides = { left: [], right: [] };
+  for (const t in need) if (need[t] < 0) throw new Error('Prea multe piese de tip ' + t);
+  if (starts) {
+    cfg.leftovers = leftovers(board, agents, starts);
+    cfg.leftovers.forEach(a => sides[onLeft(starts[a]) ? 'left' : 'right'].push(agents[a].t));
+  } else for (const t in need) for (let i = 0; i < need[t]; i++) sides[t === t.toUpperCase() ? 'left' : 'right'].push(t);   // the very first layout
+  fillTray(cfg, sides.left, TRAY_CELLS.left, agents, starts);
+  fillTray(cfg, sides.right, TRAY_CELLS.right, agents, starts);
   return cfg;
 }
 
+const isTrayCol = c => cx(c) < TRAY_W || cx(c) >= W - TRAY_W;
+const crossing = (from, to) => isTrayCol(to) && onLeft(from) !== onLeft(to) ? WRONG_TRAY : 0;
 // asignare piese -> ținte, pe tip
 function assign(agents, starts, cfg, mode, diag) {
   const goals = new Array(agents.length);
@@ -144,13 +167,17 @@ function assign(agents, starts, cfg, mode, diag) {
     const { ag, tg } = byType[t];
     if (mode === 'bottleneck') continue;
     if (mode === 'naive') {
-      const as = ag.slice().sort((a, b) => starts[a] - starts[b]);
-      const ts = tg.slice().sort((a, b) => a - b);
-      as.forEach((a, i) => goals[a] = ts[i]);
+      const byCell = (x, y) => x - y, byStart = (a, b) => starts[a] - starts[b], stays = a => !cfg.leftovers.has(a);
+      const onBoard = c => !isTrayCol(c);
+      ag.filter(stays).sort(byStart).forEach((a, i, l) => goals[a] = tg.filter(onBoard).sort(byCell)[i]);
+      for (const side of [true, false]) {
+        const ts = tg.filter(c => !onBoard(c) && onLeft(c) === side).sort(byCell);
+        ag.filter(a => !stays(a) && onLeft(starts[a]) === side).sort(byStart).forEach((a, i) => goals[a] = ts[i]);
+      }
     } else {
       const m = ag.map(a => tg.map(c => {
         const d = diag ? octile(starts[a], c) : manh(starts[a], c);
-        return d + (d > 0 ? 0.35 : 0); // la egalitate, preferă să mute mai puține piese
+        return d + (d > 0 ? 0.35 : 0) + crossing(starts[a], c); // la egalitate, preferă să mute mai puține piese
       }));
       const res = hungarian(m);
       ag.forEach((a, i) => goals[a] = tg[res[i]]);
@@ -189,7 +216,7 @@ function bottleneckAssign(byType, starts, goals, diag) {
   let L = 0;
   for (const t in byType) {
     const { ag, tg } = byType[t];
-    mats[t] = ag.map(a => tg.map(c => D[c * N + starts[a]]));
+    mats[t] = ag.map(a => tg.map(c => D[c * N + starts[a]] + crossing(starts[a], c)));
     L = Math.max(L, typeBottleneck(mats[t]));
   }
   for (const t in byType) {
