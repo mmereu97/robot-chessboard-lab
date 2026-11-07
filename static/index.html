@@ -6,7 +6,7 @@
 <title>Robot Chessboard Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="css/style.css?v=20261107e">
+<link rel="stylesheet" href="css/style.css?v=20261107g">
 </head>
 <body>
 <div class="wrap">
@@ -15,13 +15,13 @@
       <h1>Robot <span>chessboard</span> lab</h1>
       <p class="lede">The pieces drive themselves to the next puzzle: no teleporting, no touching. The default planner moves as many pieces at once as it can to make each reset as short as possible.</p>
     </div>
-    <div class="clock"><span class="kbd">Space</span> random · <span class="kbd">← →</span> previous / next · <span class="kbd">R</span> reset · <span class="kbd">P</span> paths</div>
+    <div class="clock" id="keysHelp"><span class="kbd">Space</span> random · <span class="kbd">← →</span> previous / next · <span class="kbd">R</span> reset · <span class="kbd">P</span> paths</div>
   </header>
 
   <div class="main">
     <div class="stage">
       <div class="readout">
-        <div><div class="pz-name" id="pzName">Starting position</div><div class="pz-desc" id="pzDesc">All 32 pieces on their home squares.</div></div>
+        <div><div class="pz-name"><span id="pzName">Starting position</span> <span class="pz-done" id="pzDone" hidden>✓ Solved</span></div><div class="pz-desc" id="pzDesc">All 32 pieces on their home squares.</div></div>
         <div class="clock" id="clock">ready</div>
       </div>
       <canvas id="cv" width="1270" height="860" aria-label="Chessboard with side trays for pieces not in play"></canvas>
@@ -29,6 +29,7 @@
       <div class="toolbar">
         <button class="btn" id="prevBtn" type="button"><span aria-hidden="true">◀</span> Previous puzzle <span class="kbd">←</span></button>
         <button class="btn" id="nextBtn" type="button">Next puzzle <span aria-hidden="true">▶</span> <span class="kbd">→</span></button>
+        <button class="btn" id="unsolvedBtn" type="button" hidden>Next unsolved</button>
         <span class="spacer"></span>
         <button class="btn toggle" id="trailBtn" type="button" aria-pressed="true"><i></i> Paths <span class="kbd">P</span></button>
       </div>
@@ -48,6 +49,7 @@
           <button class="btn" id="gLive" type="button" title="Back to the current move (↓ or End)" aria-label="Back to the current move">▶|</button>
         </div>
         <div class="row">
+          <button class="btn" id="gNext" type="button" hidden>Next unsolved <span aria-hidden="true">▶</span></button>
           <button class="btn" id="gRestart" type="button">Restart position</button>
           <button class="btn" id="gResign" type="button" hidden>Resign</button>
           <button class="btn" id="gHint" type="button">Hint</button>
@@ -59,6 +61,10 @@
     </div>
 
     <aside>
+      <div class="mode-tabs" role="tablist" aria-label="What to do">
+        <button class="mode-tab on" id="modePuzzles" type="button">Puzzles</button>
+        <button class="mode-tab" id="modePlay" type="button">Play Stockfish</button>
+      </div>
       <div class="side-tabs" role="tablist">
         <button class="side-tab on" id="tabMain" type="button">Controls</button>
         <button class="side-tab" id="tabSizes" type="button">Piece sizes</button>
@@ -74,8 +80,29 @@
         <p class="sub" style="margin:6px 0 0;font-size:12.5px">Unticked, the space around the symbol stays transparent.</p>
       </div>
       <div class="panel-main" id="panelMain">
+      <div class="mode-pane" id="panePuzzles">
+      <div class="progress" id="progressBox" hidden>
+        <div class="progress-head"><b id="progressText"></b><span id="progressPct"></span></div>
+        <div class="progress-bar"><i id="progressFill"></i></div>
+        <div class="progress-foot"><span id="progressChapter"></span><button class="link-btn" id="progressReset" type="button">Reset progress</button></div>
+      </div>
+      <div class="pz-help" id="pzHelp"><b id="pzHelpTitle"></b><p id="pzHelpText"></p></div>
       <button class="go" id="goBtn" type="button">Random puzzle <small id="queueTag">→</small></button>
       <button class="btn" id="resetBtn" type="button">Reset board to starting position</button>
+      <div>
+        <div id="poolWrap">
+        <p class="lbl" id="poolLbl">Random from</p>
+        <select id="poolSel" aria-label="Random pool">
+          <option value="all">All positions</option>
+          <option value="m2">Mate in two only</option>
+          <option value="classic">Classic positions only</option>
+        </select>
+        </div>
+        <p class="lbl" id="pickLbl" style="margin-top:14px">Or pick one</p>
+        <select id="pzSel" aria-label="Pick a puzzle"></select>
+      </div>
+      </div>
+      <div class="mode-pane" id="panePlay" hidden>
       <div>
         <p class="lbl">Play Stockfish</p>
         <div class="row">
@@ -86,21 +113,10 @@
             <option value="r">Random color</option>
           </select>
         </div>
-        <button class="btn" id="botBtn" type="button" style="width:100%;margin-top:8px">Play Stockfish</button>
+        <button class="btn" id="botBtn" type="button" style="width:100%;margin-top:8px">New game</button>
         <p class="sub" style="margin:8px 0 0;font-size:12.5px">Below Elo 1320 it plays and errs like a person. Below 500 some of its moves are pure chance: for a child's first games.</p>
         <label style="display:block;margin-top:8px;font-size:13px"><input type="checkbox" id="botFight"> A rook or more down, it stops making mistakes</label>
       </div>
-      <div>
-        <div id="poolWrap">
-        <p class="lbl">Random from</p>
-        <select id="poolSel" aria-label="Random pool">
-          <option value="all">All positions</option>
-          <option value="m2">Mate in two only</option>
-          <option value="classic">Classic positions only</option>
-        </select>
-        </div>
-        <p class="lbl" style="margin-top:14px">Or pick one</p>
-        <select id="pzSel" aria-label="Pick a puzzle"></select>
       </div>
       <div>
         <p class="lbl">Planner</p>
@@ -165,11 +181,11 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=20261107e"></script>
-<script src="js/puzzles.js?v=20261107e"></script>
+<script src="js/engine.js?v=20261107g"></script>
+<script src="js/puzzles.js?v=20261107g"></script>
 <script>if (/^(localhost$|127\.)/.test(location.hostname)) document.write('<script src="js/puzzles-private.js"><\/script>');</script>
-<script src="js/chess.js?v=20261107e"></script>
-<script src="js/pieces.js?v=20261107e"></script>
-<script src="js/app.js?v=20261107e"></script>
+<script src="js/chess.js?v=20261107g"></script>
+<script src="js/pieces.js?v=20261107g"></script>
+<script src="js/app.js?v=20261107g"></script>
 </body>
 </html>

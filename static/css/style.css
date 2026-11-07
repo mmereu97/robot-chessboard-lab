@@ -119,6 +119,30 @@ canvas.clickable { cursor: pointer; }
 canvas.holding { cursor: grabbing; }
 #cv.clickable { touch-action: none; }
 #cv.dragging { cursor: grabbing; }
+.mode-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--bg); border-radius: 9px; }
+.mode-tab { appearance: none; border: 0; background: none; cursor: pointer; font: 600 14px var(--f-body); color: var(--muted); padding: 9px 6px; border-radius: 6px; }
+.mode-tab.on { background: var(--accent); color: var(--accent-ink); }
+.mode-pane { display: grid; gap: inherit; }
+.mode-pane[hidden], .toolbar .btn[hidden], .go[hidden] { display: none; }
+.progress { display: grid; gap: 7px; }
+.progress[hidden] { display: none; }
+.progress-head, .progress-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; color: var(--muted); }
+.progress-head b { color: var(--ink); font-weight: 600; font-size: 14px; }
+.progress-head span { font-family: var(--f-mono); color: var(--ink); }
+.progress-bar { height: 10px; border-radius: 99px; background: var(--bg); overflow: hidden; }
+.progress-bar i { display: block; height: 100%; width: 0; background: var(--good); border-radius: 99px; transition: width .5s ease; }
+.link-btn { appearance: none; border: 0; background: none; padding: 0; cursor: pointer; font: inherit; font-size: 12px; color: var(--muted); text-decoration: underline; }
+.pz-help { border-left: 3px solid var(--accent); padding: 2px 0 2px 11px; }
+.pz-help b { font-weight: 600; font-size: 14px; }
+.pz-help p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.pz-help:not(:has(b:not(:empty))) { display: none; }
+.pz-done { font: 600 14px var(--f-body); color: var(--good); white-space: nowrap; }
+.pz-done[hidden] { display: none; }
+canvas.cheer-canvas { position: fixed; inset: 0; display: block; width: 100vw; height: 100vh; max-width: none; pointer-events: none; z-index: 50; background: transparent; border: 0; border-radius: 0; box-shadow: none; margin: 0; }
+.cheer-banner { position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%); pointer-events: none; z-index: 51; padding: 16px 30px; border-radius: 14px; background: var(--panel); color: var(--ink); border: 2px solid var(--accent); box-shadow: 0 12px 40px rgba(0,0,0,.28); text-align: center; animation: cheer 3s ease both; max-width: calc(100vw - 32px); }
+.cheer-banner b { display: block; font: 700 30px var(--f-display); color: var(--accent); }
+.cheer-banner span { display: block; margin-top: 3px; font-size: 14px; color: var(--muted); }
+@keyframes cheer { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.7); } 10% { opacity: 1; transform: translate(-50%, -50%) scale(1.04); } 16% { transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1); } }
 .side-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
 .side-tab { appearance: none; border: 0; background: none; cursor: pointer; font: 600 13.5px var(--f-body); color: var(--muted); padding: 8px 12px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .side-tab.on { color: var(--ink); border-bottom-color: var(--accent); }

@@ -97,6 +97,8 @@ const sel = $('pzSel'), mineOnly = PUZZLES.some(p => p.mine);
   for (const g in groups) { og[g] = document.createElement('optgroup'); og[g].label = groups[g]; sel.appendChild(og[g]); }
   PUZZLES.forEach((p, i) => { if (mineOnly && !p.mine) return; const o = document.createElement('option'); o.value = 'p' + i; o.textContent = p.name; og[groupOf(p)].appendChild(o); });
   if (mineOnly) {
+    $('goBtn').hidden = $('resetBtn').hidden = true; $('unsolvedBtn').hidden = false; $('progressBox').hidden = false;
+    $('poolLbl').textContent = 'Chapter'; $('pickLbl').textContent = 'Puzzle';
     $('poolSel').innerHTML = '';
     const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; $('poolSel').appendChild(o); };
     add('all', 'The whole book');
@@ -138,6 +140,7 @@ function randomKey() {
 }
 function request(key) {
   const pz = puzzleFor(key);
+  if (key !== 'bot') lastPuzzleKey = key;
   if (anim) { pending = { key, pz }; $('queueTag').textContent = 'queued: ' + pz.name; return; }
   launch(key, pz);
 }
@@ -163,7 +166,7 @@ function launch(key, pz, fromStarts) {
   }
   flip = !!(pz.bot && pz.bot.human === 'b') || pz.side === 'b';
   currentKey = key; sel.value = key;
-  $('pzName').textContent = pz.name; $('pzDesc').textContent = pz.desc + (pz.bot || pz.mine ? '' : ` Opened by: ${lastInput}.`);
+  $('pzName').textContent = pz.name; showPuzzleInfo(pz); $('pzDesc').textContent = pz.desc + (pz.bot || pz.mine ? '' : ` Opened by: ${lastInput}.`);
   $('clock').textContent = algo === 'fast' ? 'optimizing paths…' : 'planning paths…'; $('note').textContent = '';
   if (fromStarts) { cells = fromStarts.slice(); loose.fill(null); }
   const go = () => {
@@ -333,11 +336,17 @@ $('optSide').addEventListener('change', () => { try { localStorage.setItem('robo
 $('optTrails').addEventListener('change', () => setTrails($('optTrails').checked));
 try { const v = localStorage.getItem('robo-trails'); if (v !== null) setTrails(v === '1'); } catch (e) {}
 $('resetBtn').addEventListener('click', () => request('p0'));
-sel.addEventListener('change', () => request(sel.value));
+sel.addEventListener('change', () => {
+  const p = puzzleFor(sel.value);
+  if (mineOnly && p.mine && $('poolSel').value !== 'all' && $('poolSel').value !== p.chapter) { $('poolSel').value = p.chapter; try { localStorage.setItem('robo-pool', p.chapter); } catch (e) {} }
+  request(sel.value);
+});
 $('replayBtn').addEventListener('click', () => { if (!last || anim) return; carPos = { ...last.carStart }; launch(last.key, last.pz, last.starts); });
 document.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName;
   if (/INPUT|SELECT|TEXTAREA/.test(tag)) return;
+  if (mode === 'play' && !(game && game.bot)) return;
+  if (mineOnly && (e.code === 'Space' || e.code === 'KeyR')) return;
   if (game && game.bot) {   // a stray key must not end a game against Stockfish; the arrows look through its moves
     const to = { ArrowLeft: viewedPly(game) - 1, ArrowRight: viewedPly(game) + 1, ArrowUp: 0, Home: 0, ArrowDown: game.history.length, End: game.history.length }[e.code];
     if (to !== undefined) { e.preventDefault(); viewPly(game, to); }
@@ -582,6 +591,146 @@ function startGame(pz) {
   if (pz.bot) startBotGame(pz.bot);
   refreshGame();
 }
+// =================== two modes: puzzles, or a game against Stockfish ===================
+let mode = 'puzzles', lastPuzzleKey = null;
+function showMode(m) {
+  mode = m;
+  $('panePuzzles').hidden = m !== 'puzzles'; $('panePlay').hidden = m !== 'play';
+  $('modePuzzles').classList.toggle('on', m === 'puzzles'); $('modePlay').classList.toggle('on', m === 'play');
+  $('prevBtn').hidden = $('nextBtn').hidden = m === 'play';
+  $('unsolvedBtn').hidden = !mineOnly || m === 'play';
+  $('keysHelp').innerHTML = m === 'play' ? '<span class="kbd">← →</span> look through the moves · <span class="kbd">P</span> paths'
+    : (mineOnly ? '' : '<span class="kbd">Space</span> random · ') + '<span class="kbd">← →</span> previous / next · ' + (mineOnly ? '' : '<span class="kbd">R</span> reset · ') + '<span class="kbd">P</span> paths';
+}
+function goMode(m) {
+  if (m === mode) return;
+  if (game && game.bot && game.history.length && game.phase !== 'done' && !confirm('Leave this game against Stockfish?')) return;
+  showMode(m);
+  if (m === 'play') request('bot');
+  else request(lastPuzzleKey || (mineOnly ? firstUnsolved() : 'p1'));
+}
+$('modePuzzles').addEventListener('click', () => goMode('puzzles'));
+$('modePlay').addEventListener('click', () => goMode('play'));
+// the chapter's explanation, and whether this puzzle is solved
+const PUBLIC_HELP = {
+  classic: ['Classic positions', 'Famous mates and endgames to watch the robots set up. You can move both sides freely.'],
+  m2: ['Mate in two', 'White moves, the robot defends with Black, and White mates on the second move. Only a first move that mates against every defence counts.'],
+};
+function showPuzzleInfo(pz) {
+  const help = mineOnly ? (pz.mine && typeof CHAPTER_HELP !== 'undefined' ? [pz.chapter, CHAPTER_HELP[pz.chapter]] : null) : pz.bot ? null : pz.set ? PUBLIC_HELP.m2 : PUBLIC_HELP.classic;
+  $('pzHelpTitle').textContent = help ? help[0] : ''; $('pzHelpText').textContent = help ? help[1] : '';
+  $('pzDone').hidden = !(pz.mine && solved.has(pz.num));
+}
+// =================== progress, kept in a file by serve.py and in the browser ===================
+const solved = new Set();
+const mineIds = () => PUZZLES.map((p, i) => i).filter(i => PUZZLES[i].mine);
+function firstUnsolved(from = -1) {
+  const ids = mineIds().filter(i => inPool(PUZZLES[i], $('poolSel').value)), open = ids.filter(i => !solved.has(PUZZLES[i].num));
+  const pick = open.find(i => i > from);
+  return 'p' + (pick !== undefined ? pick : open.length ? open[0] : ids[0]);
+}
+function saveProgress() {
+  const list = [...solved].sort((a, b) => a - b);
+  try { localStorage.setItem('robo-solved', JSON.stringify(list)); } catch (e) {}
+  fetch('/api/progress', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(list) }).catch(() => {});
+}
+async function loadProgress() {
+  try { JSON.parse(localStorage.getItem('robo-solved') || '[]').forEach(n => solved.add(n)); } catch (e) {}
+  const here = solved.size;
+  try {
+    const r = await fetch('/api/progress');
+    if (r.ok) { const list = await r.json(); list.forEach(n => solved.add(n)); if (solved.size !== list.length) saveProgress(); else if (solved.size !== here) saveProgress(); }
+  } catch (e) {}
+}
+function renderProgress() {
+  if (!mineOnly) return;
+  const all = PUZZLES.filter(p => p.mine), done = all.filter(p => solved.has(p.num)).length, pct = Math.floor(100 * done / all.length);
+  $('progressText').textContent = `${done} of ${all.length} solved`; $('progressPct').textContent = pct + '%';
+  $('progressFill').style.width = (100 * done / all.length) + '%';
+  const pool = $('poolSel').value, inCh = all.filter(p => pool === 'all' || p.chapter === pool);
+  $('progressChapter').textContent = pool === 'all' ? '' : `${pool}: ${inCh.filter(p => solved.has(p.num)).length} of ${inCh.length}`;
+  PUZZLES.forEach((p, i) => { if (p.mine) { const o = sel.querySelector(`option[value="p${i}"]`); if (o) o.textContent = (solved.has(p.num) ? '✓ ' : '') + p.name; } });
+  [...$('poolSel').options].forEach(o => { if (o.value === 'all') return; const c = all.filter(p => p.chapter === o.value); o.textContent = `${o.value} (${c.filter(p => solved.has(p.num)).length}/${c.length})`; });
+}
+function markSolved(pz) {
+  if (solved.has(pz.num)) return false;
+  solved.add(pz.num); saveProgress(); renderProgress();
+  $('pzDone').hidden = false;
+  return true;
+}
+function nextUnsolved() { request(firstUnsolved(lastPuzzleKey ? +lastPuzzleKey.slice(1) : -1)); }
+$('unsolvedBtn').addEventListener('click', nextUnsolved);
+$('gNext').addEventListener('click', nextUnsolved);
+$('progressReset').addEventListener('click', () => {
+  if (!confirm('Forget all the solved puzzles?')) return;
+  solved.clear(); saveProgress(); renderProgress(); $('pzDone').hidden = true;
+});
+$('poolSel').addEventListener('change', () => { if (mineOnly) { renderProgress(); request(firstUnsolved()); } });
+// =================== a celebration: three seconds of fireworks ===================
+let cheerStop = null;
+function celebrate(title, line) {
+  if (cheerStop) cheerStop();
+  const banner = document.createElement('div');
+  banner.className = 'cheer-banner'; banner.setAttribute('role', 'status');
+  const b = document.createElement('b'); b.textContent = title; banner.appendChild(b);
+  if (line) { const s = document.createElement('span'); s.textContent = line; banner.appendChild(s); }
+  document.body.appendChild(banner);
+  let live = true, canvas = null;
+  const stop = () => { live = false; banner.remove(); if (canvas) canvas.remove(); if (cheerStop === stop) cheerStop = null; };
+  cheerStop = stop;
+  setTimeout(stop, 3000);
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  canvas = document.createElement('canvas'); canvas.className = 'cheer-canvas';
+  const dpr = Math.min(2, window.devicePixelRatio || 1), w = innerWidth, h = innerHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr; document.body.appendChild(canvas);
+  const c = canvas.getContext('2d'); c.scale(dpr, dpr);
+  const COLORS = ['#f0861a', '#f2b90f', '#ef2f5f', '#1fa968', '#0ea5e9', '#a24df0', '#e0218a'];
+  const rockets = [], sparks = [], t0 = performance.now();
+  let lastLaunch = -1e9, prev = t0;
+  const burst = (x, y) => {
+    const col = COLORS[Math.floor(Math.random() * COLORS.length)], col2 = COLORS[Math.floor(Math.random() * COLORS.length)], n = 90;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.1, v = 160 + Math.random() * 320;
+      sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.9 + Math.random() * 0.7, age: 0, col: i % 3 ? col : col2 });
+    }
+  };
+  const tick = now => {
+    if (!live) return;
+    const dt = Math.min(0.05, (now - prev) / 1000), el = now - t0; prev = now;
+    c.globalCompositeOperation = 'destination-out'; c.fillStyle = 'rgba(0,0,0,.2)'; c.fillRect(0, 0, w, h);
+    c.globalCompositeOperation = 'source-over';
+    if (el < 2200 && el - lastLaunch > 230) {
+      lastLaunch = el;
+      rockets.push({ x: w * (0.12 + Math.random() * 0.76), y: h, vx: (Math.random() - 0.5) * 70, vy: -(h * 0.75 + Math.random() * h * 0.5), col: COLORS[Math.floor(Math.random() * COLORS.length)], fuse: 0.6 + Math.random() * 0.45 });
+    }
+    for (let i = rockets.length - 1; i >= 0; i--) {
+      const r = rockets[i];
+      r.x += r.vx * dt; r.y += r.vy * dt; r.vy += 260 * dt; r.fuse -= dt;
+      c.fillStyle = r.col; c.beginPath(); c.arc(r.x, r.y, 2.4, 0, 7); c.fill();
+      if (r.fuse <= 0) { burst(r.x, r.y); rockets.splice(i, 1); }
+    }
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      s.age += dt; if (s.age >= s.life) { sparks.splice(i, 1); continue; }
+      s.vx *= 1 - 1.4 * dt; s.vy = s.vy * (1 - 1.4 * dt) + 150 * dt; s.x += s.vx * dt; s.y += s.vy * dt;
+      c.globalAlpha = 1 - s.age / s.life; c.fillStyle = s.col; c.beginPath(); c.arc(s.x, s.y, 2.8, 0, 7); c.fill();
+    }
+    c.globalAlpha = 1;
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+function cheerWin(g) {
+  if (g.cheered) return;
+  g.cheered = true;
+  if (g.bot) { celebrate('You win!', 'Stockfish at Elo ' + g.bot.elo); return; }
+  if (!g.pz.mine) { celebrate('Solved!'); return; }
+  const fresh = markSolved(g.pz), all = PUZZLES.filter(p => p.mine), n = all.filter(p => solved.has(p.num)).length;
+  const inCh = all.filter(p => p.chapter === g.pz.chapter), left = inCh.filter(p => !solved.has(p.num)).length;
+  if (fresh && n === all.length) celebrate('The whole book!', `All ${n} puzzles solved`);
+  else if (fresh && !left) celebrate('Chapter complete!', `${g.pz.chapter}: ${inCh.length} of ${inCh.length}`);
+  else celebrate('Solved!', `${n} of ${all.length}`);
+}
 // =================== exercises from a book ===================
 // The book's main line is what the robot plays. A mate reached another way counts: the solver checks it and defends.
 const bookGoal = pz => pz.goal && pz.goal !== 'view';
@@ -740,6 +889,8 @@ const moveLabel = (g, ply) => `${(ply + 1) >> 1}${ply % 2 ? '.' : '…'} ${g.his
 function refreshGame() {
   if (!game) return;
   const g = game, st = CH.status(g.st), side = g.st.white ? 'White' : 'Black';
+  if (g.result === 'win') cheerWin(g);
+  $('gNext').hidden = !(g.pz.mine && g.result === 'win');
   let text = '', cls = '';
   if (g.view !== null) text = g.view ? `Looking back: after ${moveLabel(g, g.view)}` : 'Looking back: the starting position';
   else if (g.result === 'win') { text = g.winMsg || 'Checkmate. Solved!'; cls = 'win'; }
@@ -1192,6 +1343,7 @@ applyThemeDiameter();
 resize();
 document.fonts && document.fonts.ready.then(() => draw());
 requestAnimationFrame(frame);
-// on opening, always the same: the board ready for a game against Stockfish at Elo 800, with you as White
 $('botElo').value = 800; $('botColor').value = 'w';
-setTimeout(() => request('bot'), 300);
+// with the book: back to the first puzzle not solved yet. Otherwise, on opening, always the same: a game against Stockfish at Elo 800, with you as White
+if (mineOnly) { showMode('puzzles'); loadProgress().then(() => { renderProgress(); request(firstUnsolved()); }); }
+else { showMode('play'); setTimeout(() => request('bot'), 300); }

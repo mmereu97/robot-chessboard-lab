@@ -1,12 +1,14 @@
 """Run this file in PyCharm (right-click > Run 'serve') to open the robot chessboard lab.
 
-It serves the static/ folder on localhost and opens it in your browser.
+It serves the static/ folder on localhost and opens it in your browser. The private
+puzzles you have solved are kept in puzzle-progress.json, next to this file.
 If a port is blocked or busy (common on Windows with Hyper-V, WSL or Docker),
 it tries the next one, and finally lets the system pick a free port.
 Stop it with the red square in PyCharm's Run window.
 """
 import functools
 import http.server
+import json
 import socketserver
 import sys
 import webbrowser
@@ -14,6 +16,7 @@ from pathlib import Path
 
 PORTS = [8000, 8080, 5500, 8765, 3000, 0]  # 0 = any free port chosen by the system
 ROOT = Path(__file__).resolve().parent / "static"
+PROGRESS = Path(__file__).resolve().parent / "puzzle-progress.json"
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -21,6 +24,34 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # always serve the latest version of the files you edit
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
+
+    def reply_json(self, status, body):
+        data = body.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):
+        if self.path != "/api/progress":
+            return super().do_GET()
+        self.reply_json(200, PROGRESS.read_text(encoding="utf-8") if PROGRESS.exists() else "[]")
+
+    def do_POST(self):
+        # This content type makes a browser ask first, so other sites cannot write here.
+        if self.path != "/api/progress" or self.headers.get("Content-Type") != "application/json":
+            return self.reply_json(404, "{}")
+        try:
+            solved = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length", 0)), 100000)))
+            if not isinstance(solved, list) or not all(isinstance(n, int) for n in solved):
+                raise ValueError
+        except ValueError:
+            return self.reply_json(400, "{}")
+        temp = PROGRESS.with_suffix(".tmp")
+        temp.write_text(json.dumps(solved), encoding="utf-8")
+        temp.replace(PROGRESS)
+        self.reply_json(200, "{}")
 
     def log_message(self, fmt, *args):
         pass  # keep the Run window quiet
