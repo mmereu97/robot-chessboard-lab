@@ -506,6 +506,10 @@ function draw() {
     // where it would land, then the piece itself on the cursor
     const side = traySide(mouse.x), c = side < 0 ? null : dropPoint(mouse.x, mouse.y, side);
     if (c !== null) { ctx.strokeStyle = tok['--accent']; ctx.lineWidth = 0.05; ctx.setLineDash([0.1, 0.07]); ctx.beginPath(); ctx.arc(vx(c.x), c.y, pieceBase() / 2, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
+    if (game.phase === 'place' && side < 0) {   // over the board: the square it would land on
+      const q = squareAtMouse();
+      if (q >= 0 && !game.st.b[q]) { ctx.strokeStyle = tok['--accent']; ctx.lineWidth = 0.05; ctx.strokeRect(sqX(q) - 0.475, sqY(q) - 0.475, 0.95, 0.95); }
+    }
     drawPiece(agents[inHand], { x: mouse.x, y: mouse.y, screen: true }, 1);
   }
   if (flip) ctx.restore();
@@ -572,7 +576,7 @@ function startGame(pz) {
   $('gMode').textContent = m2 ? 'White to move · mate in two · the robot defends' : 'Free play · you move both sides';
   $('gHint').hidden = !(m2 || bookGoal(pz)); $('gSolution').hidden = !(m2 || pz.goal);
   if (pz.goal) $('gMode').textContent = goalText(pz);
-  if (pz.goal === 'place') game.phase = 'place';
+  if (pz.goal === 'place') { game.phase = 'place'; missingPieceOnTray(pz); }
   $('gRestart').textContent = pz.bot ? 'New game' : 'Restart position';
   $('gNav').hidden = !pz.bot;
   if (pz.bot) startBotGame(pz.bot);
@@ -618,31 +622,26 @@ function bookNext(g) {
     if (m) playMove(m); else bookLost(g, 'The book’s next move is not possible here. See the solution.');
   }, 450);
 }
-// "The missing piece": a piece waiting on a tray drives to the square you click
-function placeAt(g, sq) {
-  const pz = g.pz, type = pz.side === 'b' ? pz.place.piece.toLowerCase() : pz.place.piece, to = sqToCell(sq);
-  let a = spareFor(type, to);
-  if (a < 0) {   // none of that type left over: another robot of that colour takes it on
-    const white = type === type.toUpperCase();
-    a = agents.findIndex((ag, j) => ag.white === white && isTrayCell(cells[j]));
-    if (a < 0) a = agents.findIndex((_, j) => isTrayCell(cells[j]));
-    if (a < 0) return;
-    agents[a].t = type;
-  }
-  g.phase = 'moving'; g.hint = -1; refreshGame();
-  const settled = () => {
-    const b = g.st.b.slice(); b[sq] = type;
-    g.st = { ...g.st, b }; g.last = { from: sq, to: sq };
-    if (pz.placeMate) {
-      if (CH.status({ ...g.st, white: !g.st.white }) === 'mate') bookWon(g, 'Checkmate. Solved!');
-      else bookLost(g, 'Not mate on that square. Restart the position to try again.');
-    } else if (CH.NAME(sq) !== pz.place.square) bookLost(g, 'Not the book’s square. Restart the position to try again.');
-    else if (!pz.line.length) bookWon(g, 'Solved, as in the book.');
-    else { g.phase = 'user'; refreshGame(); }
-  };
-  const plan = bringFromTray(a, to);
-  if (plan) runSettle(plan, settled);
-  else { loose[a] = null; cells = cells.slice(); cells[a] = to; settled(); }
+// "The missing piece": you take it from a tray and put it on its square, by hand, so no robot carries it
+const placeType = pz => pz.side === 'b' ? pz.place.piece.toLowerCase() : pz.place.piece;
+function missingPieceOnTray(pz) {   // none of that type left over: another robot of that colour takes it on
+  const type = placeType(pz), white = type === type.toUpperCase();
+  if (agents.some((ag, j) => ag.t === type && isTrayCell(cells[j]))) return;
+  let a = agents.findIndex((ag, j) => ag.white === white && isTrayCell(cells[j]));
+  if (a < 0) a = agents.findIndex((_, j) => isTrayCell(cells[j]));
+  if (a >= 0) agents[a].t = type;
+}
+function placeAt(g, sq, a) {
+  const pz = g.pz, type = placeType(pz);
+  cells = cells.slice(); cells[a] = sqToCell(sq); loose[a] = null;
+  const b = g.st.b.slice(); b[sq] = type;
+  g.st = { ...g.st, b }; g.last = { from: sq, to: sq }; g.hint = -1;
+  if (pz.placeMate) {
+    if (CH.status({ ...g.st, white: !g.st.white }) === 'mate') bookWon(g, 'Checkmate. Solved!');
+    else bookLost(g, 'Not mate on that square. Restart the position to try again.');
+  } else if (CH.NAME(sq) !== pz.place.square) bookLost(g, 'Not the book’s square. Restart the position to try again.');
+  else if (!pz.line.length) bookWon(g, 'Solved, as in the book.');
+  else { g.phase = 'user'; refreshGame(); }
 }
 // =================== playing Stockfish ===================
 // The bot and its 7 MB engine live in static/bot/ and load only when someone wants to play.
@@ -749,10 +748,10 @@ function refreshGame() {
   else if (st === 'mate') { text = 'Checkmate. ' + (g.st.white ? 'Black' : 'White') + ' wins.'; cls = 'win'; }
   else if (st === 'stalemate') { text = 'Stalemate.'; }
   else if (g.asking) text = 'Promote to:';
-  else if (trayHand && trayHand.moved) text = `Put the ${PIECE_NAME[agents[trayHand.a].t.toLowerCase()]} down on either tray.`;
+  else if (trayHand && trayHand.moved) text = g.phase === 'place' && agents[trayHand.a].t === placeType(g.pz) ? `Put the ${PIECE_NAME[agents[trayHand.a].t.toLowerCase()]} on its square.` : `Put the ${PIECE_NAME[agents[trayHand.a].t.toLowerCase()]} down on either tray.`;
   else if (g.held && g.held.queued === null) text = `Take the ${PIECE_NAME[agents[g.held.a].t.toLowerCase()]} off the board: click a free place on a tray.`;
   else if (g.phase === 'loading') text = 'Starting Stockfish…';
-  else if (g.phase === 'place') text = `Click the square for the ${PIECE_NAME[g.pz.place.piece.toLowerCase()]}.`;
+  else if (g.phase === 'place') text = `Take a ${PIECE_NAME[g.pz.place.piece.toLowerCase()]} from a tray and put it on its square.`;
   else if (g.phase === 'robot') text = g.bot ? 'Stockfish is thinking…' : g.pz.goal ? 'The robot answers…' : 'Black is thinking…';
   else if (g.phase === 'moving') text = 'Moving…';
   else text = (g.m2 || g.bot || bookGoal(g.pz) ? 'Your move' : side + ' to move') + (st === 'check' ? ' · check' : '');
@@ -1048,6 +1047,13 @@ function trayPieceAt(x, y) {
 function dropTrayHand(g) {
   const a = trayHand.a, side = traySide(mouse.x);
   trayHand = null; cv.classList.remove('dragging');
+  if (side < 0 && g.phase === 'place' && !anim) {
+    const sq = squareAtMouse();
+    if (sq >= 0 && !g.st.b[sq] && agents[a].t === placeType(g.pz)) { placeAt(g, sq, a); return; }
+    refreshGame();
+    if (sq >= 0 && agents[a].t !== placeType(g.pz)) flashHold(`That is not a ${PIECE_NAME[g.pz.place.piece.toLowerCase()]}: it goes back to the tray.`);
+    return;
+  }
   if (side >= 0) putOnTray(g, a, dropPoint(mouse.x, mouse.y, side));   // anywhere else: it goes back where it lay
   refreshGame();
 }
@@ -1115,7 +1121,7 @@ cv.addEventListener('click', e => {
   if (skipClick) { skipClick = false; return; }
   trackMouse(e);
   if (g && g.asking) { g.asking = null; g.sel = -1; refreshGame(); return; }   // changed your mind about the promotion
-  if (g && g.phase === 'place' && !anim) { const sq = squareAtMouse(); if (sq >= 0 && !g.st.b[sq]) placeAt(g, sq); return; }
+  if (g && g.phase === 'place') return;
   if (g && g.view !== null) { viewPly(g, g.history.length); return; }   // looking back: a click on the board returns to the game
   if (g && g.held && g.held.queued === null) { dropHeld(); return; }
   if (!g || anim || g.phase !== 'user' || CH.status(g.st) === 'mate' || CH.status(g.st) === 'stalemate') return;
