@@ -135,6 +135,8 @@ Add a line to `PUZZLES` in `static/js/puzzles.js`:
 
 Puzzles of your own can stay off the public site: put them in `static/js/puzzles-private.js`, which git ignores and the page loads only on localhost (run `serve.py`). The file calls `PUZZLES.push(...)` with the same fields, plus `mine: true` and `chapter`, the group in the list, and optionally `sol`, the text that Show solution displays. With such a file, the page opens on the first puzzle not solved yet and offers only its puzzles, by chapter, with no Random. It shows a progress bar and a tick on each solved puzzle; `serve.py` keeps them in `puzzle-progress.json`, which git ignores, and the browser keeps a copy. A `CHAPTER_HELP` object in the file gives each chapter's explanation.
 
+Hint works on every turn, in two steps: the first press marks the piece that moves, the second also the square it goes to. After a wrong first move in a mate in two it says so.
+
 A puzzle can also have a `goal`, with `line`, the book's main line in SAN, and `side: 'b'` when Black moves first (the board then turns around):
 
 - `goal: 'mate', n`: mate in n. The robot plays the book's replies. A different move counts if the solver proves that it still forces mate, and the robot then defends as long as it can.

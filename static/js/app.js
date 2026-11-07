@@ -585,7 +585,7 @@ const sqX = sq => vx(TRAY_W + (sq & 7) + 0.5), sqY = sq => (sq >> 3) + 0.5;
 function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); $('material').hidden = true; $('gHint').hidden = $('gSolution').hidden = true; game = null; glide = null; trayHand = null; $('gPromo').hidden = true; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
 function startGame(pz) {
   const m2 = pz.set === 'm2';
-  game = { pz, st: CH.fromFEN(pz.fen, pz.side !== 'b'), m2, history: [], sel: -1, last: null, phase: 'user', userMoves: 0, hint: -1, result: '', view: null };
+  game = { pz, st: CH.fromFEN(pz.fen, pz.side !== 'b'), m2, history: [], sel: -1, last: null, phase: 'user', userMoves: 0, hint: -1, hintTo: -1, result: '', view: null };
   if (m2) game.keys = CH.mateIn2Keys(game.st);
   $('game').hidden = false; cv.classList.add('clickable');
   $('gMode').textContent = m2 ? 'White to move · mate in two · the robot defends' : 'Free play · you move both sides';
@@ -968,7 +968,7 @@ function takeBack(g) {
   g.st = st; g.last = g.moves[k - 1] || null;
   g.bot.brain = g.bot.mod.newGame(fenOf(CH.fromFEN(g.pz.fen, true)));
   for (const m of g.moves) g.bot.brain.play(uciOf(m));
-  g.result = ''; g.loseMsg = g.winMsg = g.drawMsg = ''; g.cheered = false; g.confirmResign = false; g.asking = null; g.sel = -1; g.hint = -1;
+  g.result = ''; g.loseMsg = g.winMsg = g.drawMsg = ''; g.cheered = false; g.confirmResign = false; g.asking = null; g.sel = -1; g.hint = g.hintTo = -1;
   g.takebacks = (g.takebacks || 0) + 1;
   agents.forEach((ag, a) => { ag.t = g.frames[k].types[a]; });   // a promoted piece is a pawn again
   g.phase = 'moving'; refreshGame();
@@ -1118,7 +1118,7 @@ function playMove(m, byUser = false, dropped = false, chosen = -1) {
   if (m.castle) goals[map.get(sqToCell(m.rookFrom))] = sqToCell(m.rookTo);
   g.history.push(CH.san(g.st, m)); (g.moves = g.moves || []).push(m);
   if (g.bot) g.bot.brain.play(uciOf(m));
-  g.st = CH.make(g.st, m); g.last = m; g.sel = -1; g.hint = -1; g.phase = 'moving';
+  g.st = CH.make(g.st, m); g.last = m; g.sel = -1; g.hint = g.hintTo = -1; g.phase = 'moving';
   refreshGame();
   const go = () => setTimeout(() => {
     const plan = planFixed(algo, cells.slice(), goals, opt(), carPos);
@@ -1418,7 +1418,7 @@ cv.addEventListener('pointerdown', e => {
 window.addEventListener('pointermove', () => {
   if (trayHand && !trayHand.moved && Math.hypot(mouse.x - trayHand.x, mouse.y - trayHand.y) >= DRAG_START) { trayHand.moved = trayHand.dragged = true; cv.classList.add('dragging'); refreshGame(); }
   if (!drag || drag.moved || Math.hypot(mouse.x - drag.x, mouse.y - drag.y) < DRAG_START) return;
-  drag.moved = true; game.sel = drag.sq; game.hint = -1; cv.classList.add('dragging');
+  drag.moved = true; game.sel = drag.sq; game.hint = game.hintTo = -1; cv.classList.add('dragging');
 });
 window.addEventListener('pointerup', e => {
   if (trayHand) {
@@ -1456,20 +1456,49 @@ cv.addEventListener('click', e => {
   g.sel = (p && (p === p.toUpperCase()) === g.st.white && legalFrom(sq).length) ? sq : -1;
 });
 $('gRestart').addEventListener('click', () => { if (game && !anim) request(currentKey); });
-$('gHint').addEventListener('click', () => {
-  const g = game; if (!g || !bookGoal(g.pz)) return;
+// Hint, in two steps: first the piece that moves, then also the square it goes to. Any turn, not only the first.
+function hintMove(g) {
   const pz = g.pz, i = g.history.length;
-  if (g.phase === 'place') g.hint = 'abcdefgh'.indexOf(pz.place.square[0]) + (8 - +pz.place.square[1]) * 8;
-  else if (g.phase === 'user' && !g.offBook && i < pz.line.length) { const m = CH.findSan(g.st, pz.line[i]); if (m) { g.hint = m.from; g.sel = -1; } }
+  if (g.m2) {
+    if (i === 0) return g.keys[0];
+    const st0 = CH.fromFEN(pz.fen, true);
+    if (i === 2 && g.keys.some(k => CH.san(st0, k) === g.history[0])) return CH.mateIn1(g.st);
+    return 'Your first move was not the key. Press Restart position, then Hint.';
+  }
+  if (!bookGoal(pz)) return null;
+  if (!g.offBook && i < pz.line.length) { const m = CH.findSan(g.st, pz.line[i]); if (m) return m; }
+  if (pz.goal === 'mate') {   // off the book's line but still winning: a move that keeps the mate
+    const left = pz.n - (i >> 1), budget = { left: SOLVER_POSITIONS };
+    return CH.legal(g.st).find(m => { const s = CH.make(g.st, m); return CH.isMate(s) || (left > 1 && CH.allRepliesLose(s, left - 1, budget) === true); }) || 'Too deep for a hint here. Restart the position to see the book’s way.';
+  }
+  return null;
+}
+$('gHint').addEventListener('click', () => {
+  const g = game; if (!g || g.result) return;
+  const say = t => { $('gStatus').textContent = t; $('gStatus').className = 'game-status'; };
+  if (g.phase === 'place') { const sq = g.pz.place.square; g.hint = 'abcdefgh'.indexOf(sq[0]) + (8 - +sq[1]) * 8; say('Hint: the highlighted square.'); return; }
+  if (g.phase !== 'user') return;
+  const m = hintMove(g);
+  if (typeof m === 'string') { say(m); return; }
+  if (!m) return;
+  g.sel = -1;
+  if (g.hint !== m.from) { g.hint = m.from; g.hintTo = -1; say('Hint: this piece moves. Press Hint again for the square.'); }
+  else { g.hintTo = m.to; say('Hint: from the highlighted piece to the dashed square.'); }
 });
-$('gHint').addEventListener('click', () => { if (game && game.keys && game.keys.length && game.history.length === 0) { game.hint = game.keys[0].from; game.sel = -1; $('gStatus').textContent = 'Hint: the highlighted piece starts the combination.'; } });
 $('gSolution').addEventListener('click', () => { if (game && game.pz.sol) { $('gStatus').textContent = game.pz.sol + (game.pz.note ? ` (${game.pz.note})` : ''); $('gStatus').className = 'game-status'; return; } if (game && game.keys && game.keys.length) { const st0 = CH.fromFEN(game.pz.fen, true); $('gStatus').textContent = 'Key move: ' + game.keys.map(k => CH.san(st0, k)).join(' or '); $('gStatus').className = 'game-status'; } });
 function drawGameMarks() {
   const g = game; if (!g || anim && anim.kind === 'setup') return;
   const box = (sq, col, a) => { ctx.fillStyle = col; ctx.globalAlpha = a; ctx.fillRect(sqX(sq) - 0.5, sqY(sq) - 0.5, 1, 1); ctx.globalAlpha = 1; };
   const { last, st } = g.view !== null ? g.frames[g.view] : { last: g.last, st: g.st };
   if (last) { box(last.from, tok['--accent'], 0.22); box(last.to, tok['--accent'], 0.32); }
-  if (g.hint >= 0) box(g.hint, tok['--good'] || '#2f8a57', 0.45);
+  if (g.hint >= 0) {   // clear on light and dark squares alike: a filled square and a thick ring
+    box(g.hint, tok['--accent'], 0.45);
+    ctx.strokeStyle = tok['--accent']; ctx.lineWidth = 0.08; ctx.strokeRect(sqX(g.hint) - 0.46, sqY(g.hint) - 0.46, 0.92, 0.92);
+  }
+  if (g.hintTo >= 0) {
+    ctx.strokeStyle = tok['--accent']; ctx.lineWidth = 0.08; ctx.setLineDash([0.12, 0.08]);
+    ctx.strokeRect(sqX(g.hintTo) - 0.46, sqY(g.hintTo) - 0.46, 0.92, 0.92); ctx.setLineDash([]);
+  }
   if (g.sel >= 0) box(g.sel, tok['--accent'], 0.5);
   if (CH.inCheck(st)) {
     const k = st.b.indexOf(st.white ? 'K' : 'k');
