@@ -1,6 +1,7 @@
 // ===== Motor de planificare: grilă 12x8 (2 coloane tavă + 8 tablă + 2 coloane tavă) =====
-// each tray is 4 columns of 8 places, so all the pieces fit on one of them
-const TRAY_W = 4, W = 8 + 2 * TRAY_W, H = 8, N = W * H, SQ2 = Math.SQRT2;
+// each tray is 2 columns of 8 places: together they hold the 32 pieces that can be off the board at once,
+// and a piece that does not fit on one tray goes to the other
+const TRAY_W = 2, W = 8 + 2 * TRAY_W, H = 8, N = W * H, SQ2 = Math.SQRT2;
 const DIRS = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
 const cx = c => c % W, cy = c => (c / W) | 0;
 const cellXY = c => ({ x: cx(c) + 0.5, y: cy(c) + 0.5 });
@@ -73,11 +74,11 @@ function hungarian(a) {
 // ---------- configurații ----------
 // No piece has a place of its own. A piece not in play goes to the tray on its side of the board: files a-d
 // to the left, e-h to the right; one already on a tray stays on it. Each tray fills its two columns next to
-// the board first, the farther one before the nearer, and the outer two only when those are full.
+// the board first, the farther one before the nearer, then any outer ones. A full tray sends the rest across.
 const column = col => [...Array(8).keys()].map(r => idx(col, r));
 const TRAY_CELLS = {
-  left: [TRAY_W - 2, TRAY_W - 1, TRAY_W - 3, TRAY_W - 4].flatMap(column),
-  right: [W - TRAY_W + 1, W - TRAY_W, W - TRAY_W + 2, W - TRAY_W + 3].flatMap(column),
+  left: [TRAY_W - 2, TRAY_W - 1, TRAY_W - 3, TRAY_W - 4].filter(c => c >= 0 && c < TRAY_W).flatMap(column),
+  right: [W - TRAY_W + 1, W - TRAY_W, W - TRAY_W + 2, W - TRAY_W + 3].filter(c => c >= W - TRAY_W && c < W).flatMap(column),
 };
 const onLeft = c => cx(c) < W / 2;
 const WRONG_TRAY = 1000;   // far above any distance: a leftover piece never crosses to the other tray
@@ -148,8 +149,19 @@ function targetConfig(fen, agents, starts) {
   for (const t in need) if (need[t] < 0) throw new Error('Prea multe piese de tip ' + t);
   if (starts) {
     cfg.leftovers = leftovers(board, agents, starts);
-    cfg.leftovers.forEach(a => sides[onLeft(starts[a]) ? 'left' : 'right'].push(agents[a].t));
-  } else for (const t in need) for (let i = 0; i < need[t]; i++) sides[t === t.toUpperCase() ? 'left' : 'right'].push(t);   // the very first layout
+    const by = { left: [], right: [] };
+    cfg.leftovers.forEach(a => by[onLeft(starts[a]) ? 'left' : 'right'].push(a));
+    // a tray that cannot take them all sends the pieces nearest the other side across
+    for (const [s, o] of [['left', 'right'], ['right', 'left']]) {
+      const extra = by[s].length - TRAY_CELLS[s].length;
+      if (extra > 0) by[s].sort((p, q) => s === 'left' ? cx(starts[q]) - cx(starts[p]) : cx(starts[p]) - cx(starts[q])).splice(0, extra).forEach(a => by[o].push(a));
+    }
+    for (const s of ['left', 'right']) by[s].forEach(a => sides[s].push(agents[a].t));
+    cfg.crossers = new Set([...by.left.filter(a => !onLeft(starts[a])), ...by.right.filter(a => onLeft(starts[a]))]);
+  } else {   // the very first layout
+    for (const t in need) for (let i = 0; i < need[t]; i++) sides[t === t.toUpperCase() ? 'left' : 'right'].push(t);
+    for (const [s, o] of [['left', 'right'], ['right', 'left']]) while (sides[s].length > TRAY_CELLS[s].length) sides[o].push(sides[s].pop());
+  }
   fillTray(cfg, sides.left, TRAY_CELLS.left, agents, starts);
   fillTray(cfg, sides.right, TRAY_CELLS.right, agents, starts);
   return cfg;
@@ -170,9 +182,10 @@ function assign(agents, starts, cfg, mode, diag) {
       const byCell = (x, y) => x - y, byStart = (a, b) => starts[a] - starts[b], stays = a => !cfg.leftovers.has(a);
       const onBoard = c => !isTrayCol(c);
       ag.filter(stays).sort(byStart).forEach((a, i, l) => goals[a] = tg.filter(onBoard).sort(byCell)[i]);
+      const sideOf = a => onLeft(starts[a]) !== cfg.crossers.has(a);   // the tray it goes to, overflow included
       for (const side of [true, false]) {
         const ts = tg.filter(c => !onBoard(c) && onLeft(c) === side).sort(byCell);
-        ag.filter(a => !stays(a) && onLeft(starts[a]) === side).sort(byStart).forEach((a, i) => goals[a] = ts[i]);
+        ag.filter(a => !stays(a) && sideOf(a) === side).sort(byStart).forEach((a, i) => goals[a] = ts[i]);
       }
     } else {
       const m = ag.map(a => tg.map(c => {

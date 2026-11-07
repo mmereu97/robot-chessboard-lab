@@ -199,7 +199,7 @@ function pileUp(plan) {
   });
   // nobody overlaps: those lying there keep their place if they have room, and each arrival takes
   // the free spot nearest to where it would fall
-  const NEED = D + 0.012, placed = { true: [], false: [] };
+  const NEED = D + 0.012, placed = { true: [], false: [] }, crowded = { true: false, false: false };
   const roomAt = (q, list) => list.every(o => Math.hypot(o.x - q.x, o.y - q.y) >= NEED);
   agents.forEach((_, a) => {
     if (!pos[a] || !pos[a].fixed || !final[a]) return;
@@ -214,10 +214,22 @@ function pileUp(plan) {
       const d = Math.hypot(x - want.x, y - want.y);
       if (d < bd && roomAt({ x, y }, list)) { bd = d; best = { x, y }; }
     }
-    if (!best) { best = want; console.warn('no room on the tray for piece', a); }
+    if (!best) { best = want; crowded[left(a)] = true; }
     pos[a].x = best.x; pos[a].y = best.y;
     list.push(pos[a]);
   });
+  // A tray too crowded for a heap is laid out in rows instead: two columns, as many places as fit, nearest first.
+  for (const side of [true, false]) {
+    if (!crowded[side]) continue;
+    const r = trayRect(side), mine = agents.map((_, a) => a).filter(a => pos[a] && final[a] && left(a) === side);
+    const cols = Math.max(1, Math.floor((r.x1 - r.x0) / NEED) + 1), rows = Math.floor((r.y1 - r.y0) / NEED) + 1, spots = [];
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) spots.push({ x: cols > 1 ? r.x0 + (r.x1 - r.x0) * i / (cols - 1) : (r.x0 + r.x1) / 2, y: r.y0 + (r.y1 - r.y0) * j / Math.max(1, rows - 1) });
+    const pairs = [];
+    mine.forEach(a => spots.forEach((q, k) => pairs.push({ a, k, d: Math.hypot(q.x - pos[a].x, q.y - pos[a].y) })));
+    pairs.sort((p, q) => p.d - q.d);
+    const doneA = new Set(), doneK = new Set();
+    for (const p of pairs) { if (doneA.has(p.a) || doneK.has(p.k)) continue; doneA.add(p.a); doneK.add(p.k); pos[p.a] = { x: spots[p.k].x, y: spots[p.k].y }; }
+  }
   // Pieces leaving a tray: one at a time on the magnet, the first stretch starts from where they lie. All at
   // once, each first goes from where it lies to its grid place, and from there the planner's paths hold.
   const leaving = agents.map((_, a) => a).filter(a => loose[a] && by[a].length);
@@ -1215,7 +1227,7 @@ function spotsNear(a, q0, left) {
 }
 // The shortest way off the board: along its rank to the edge of the tray, stopping as soon as it is
 // inside. If the pieces there cannot make room at that point, the nearest point where they can.
-function removeToTray(a, fromCell, slot) {
+function removeToTray(a, fromCell, slot, across = false) {
   const from = cellXY(fromCell), left = cx(slot) < TRAY_W, r = trayRect(left), edge = left ? r.x1 : r.x0;
   const tries = [{ x: edge, y: from.y }, ...spotsNear(a, from, left)];
   const before = cells;
@@ -1246,7 +1258,9 @@ function removeToTray(a, fromCell, slot) {
     if (plan) { loose[a] = end; return keepRoom(plan); }
   }
   cells = before;
-  return null;
+  // no room on this tray: the other one
+  const other = across ? -1 : freeTraySlotOn(!left, from);
+  return other >= 0 ? removeToTray(a, fromCell, other, true) : null;
 }
 function runSettle(plan, then) {
   plan.starts = plan.starts || cells.slice(); plan.goals = plan.goals || cells.slice();
@@ -1331,10 +1345,16 @@ function finishDrop(g, pt, then) {
   layOnTray(a, pt, then);
 }
 function layOnTray(a, pt, then) {
-  const left = pt.x < W / 2;
-  if ((cx(cells[a]) < TRAY_W) !== left) { const c = freeTraySlotOn(left, cellXY(cells[a])); if (c >= 0) { cells = cells.slice(); cells[a] = c; } }
+  let left = pt.x < W / 2;
+  const onSide = l => (cx(cells[a]) < TRAY_W) === l || (() => { const c = freeTraySlotOn(l, cellXY(cells[a])); if (c < 0) return false; cells = cells.slice(); cells[a] = c; return true; })();
   let plan = null, at = pt;
-  for (const q of [pt, ...spotsNear(a, pt, left)]) { plan = roomPlan(a, [q, { ...q }], true); if (plan) { at = q; break; } }
+  const tryOn = (l, near) => { for (const q of [near, ...spotsNear(a, near, l)]) { plan = roomPlan(a, [q, { ...q }], true); if (plan) { at = q; return true; } } return false; };
+  // a full tray sends the piece to the other one
+  if (!(onSide(left) && tryOn(left, pt))) {
+    const r = trayRect(!left), across = { x: (r.x0 + r.x1) / 2, y: Math.max(r.y0, Math.min(r.y1, pt.y)) };
+    if (onSide(!left) && tryOn(!left, across)) left = !left;
+    else if (!plan) at = pt;
+  }
   loose[a] = at;
   if (plan && plan.stayed.length) { plan.segs = plan.segs.filter(x => x.a !== a); runSettle(plan, then); } else then();
 }
