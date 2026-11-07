@@ -89,13 +89,19 @@ try { if (localStorage.getItem('robo-tab') === 'sizes') showTab('sizes'); } catc
 
 // --- control UI ---
 const sel = $('pzSel'), mineOnly = PUZZLES.some(p => p.mine);
-{
-  // with a private file only its puzzles are on offer, by chapter; the starting position stays for Reset and for games
+// with a private file only its puzzles are on offer, one book at a time, by chapter; the starting position stays for Reset and games
+const bookOf = p => p.book || '1001';
+const BOOKS = mineOnly ? [...new Set(PUZZLES.filter(p => p.mine).map(bookOf))] : [];
+const bookName = b => (typeof BOOK_NAMES !== 'undefined' && BOOK_NAMES[b]) || b;
+let book = BOOKS[0];
+try { const v = localStorage.getItem('robo-book'); if (BOOKS.includes(v)) book = v; } catch (e) {}
+function buildLists() {
+  sel.innerHTML = '';
   const groups = mineOnly ? {} : { twin: 'Twin mates' }, og = {};
   const groupOf = p => mineOnly ? p.chapter : p.set || 'classic';
-  if (mineOnly) PUZZLES.forEach(p => { if (p.mine) groups[p.chapter] = p.chapter; });
+  if (mineOnly) PUZZLES.forEach(p => { if (p.mine && bookOf(p) === book) groups[p.chapter] = p.chapter; });
   for (const g in groups) { og[g] = document.createElement('optgroup'); og[g].label = groups[g]; sel.appendChild(og[g]); }
-  PUZZLES.forEach((p, i) => { if ((mineOnly && !p.mine) || p.hidden) return; const o = document.createElement('option'); o.value = 'p' + i; o.textContent = p.name; og[groupOf(p)].appendChild(o); });
+  PUZZLES.forEach((p, i) => { if ((mineOnly && !(p.mine && bookOf(p) === book)) || p.hidden) return; const o = document.createElement('option'); o.value = 'p' + i; o.textContent = p.name; og[groupOf(p)].appendChild(o); });
   if (mineOnly) {
     $('goBtn').hidden = $('resetBtn').hidden = true; $('unsolvedBtn').hidden = false; $('progressBox').hidden = false;
     $('poolLbl').textContent = 'Chapter'; $('pickLbl').textContent = 'Puzzle';
@@ -103,11 +109,20 @@ const sel = $('pzSel'), mineOnly = PUZZLES.some(p => p.mine);
     const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; $('poolSel').appendChild(o); };
     add('all', 'The whole book');
     for (const g in groups) add(g, g);
+    $('bookWrap').hidden = BOOKS.length < 2;
+    if ($('bookSel').options.length !== BOOKS.length) { $('bookSel').innerHTML = ''; BOOKS.forEach(b => { const o = document.createElement('option'); o.value = b; o.textContent = bookName(b); $('bookSel').appendChild(o); }); }
+    $('bookSel').value = book;
   } else $('poolWrap').hidden = true;   // one group only: nothing to choose from
 }
+buildLists();
+$('bookSel').addEventListener('change', () => {
+  book = $('bookSel').value;
+  try { localStorage.setItem('robo-book', book); } catch (e) {}
+  buildLists(); $('poolSel').value = 'all'; renderProgress(); request(firstUnsolved());
+});
 try { const v = localStorage.getItem('robo-pool'); if (v) $('poolSel').value = v; } catch (e) {}
 if (!$('poolSel').value) $('poolSel').value = 'all';
-const inPool = (p, pool) => mineOnly ? p.mine && (pool === 'all' || p.chapter === pool) : !p.hidden && (pool === 'all' || (p.set || 'classic') === pool);
+const inPool = (p, pool) => mineOnly ? p.mine && bookOf(p) === book && (pool === 'all' || p.chapter === pool) : !p.hidden && (pool === 'all' || (p.set || 'classic') === pool);
 $('poolSel').addEventListener('change', () => { try { localStorage.setItem('robo-pool', $('poolSel').value); } catch (e) {} });
 const algosEl = $('algos');
 ['fast', 'nudge', 'ca', 'pibt', 'seq', 'naive'].map(k => [k, ALGOS[k]]).forEach(([k, A]) => {
@@ -163,7 +178,7 @@ function launch(key, pz, fromStarts) {
       agents.find(ag => ag.t === from).t = t; have[from]--; have[t] = (have[t] || 0) + 1;
     }
   }
-  flip = !!(pz.bot && pz.bot.human === 'b') || pz.side === 'b';
+  flip = !!(pz.bot && pz.bot.human === 'b') || (pz.player || pz.side) === 'b';
   currentKey = key; sel.value = key;
   $('pzName').textContent = pz.name; showPuzzleInfo(pz); $('pzDesc').textContent = pz.desc + (pz.bot || pz.mine || pz.set === 'twin' ? '' : ` Opened by: ${lastInput}.`);
   $('clock').textContent = algo === 'fast' ? 'optimizing paths…' : 'planning paths…'; $('note').textContent = '';
@@ -594,7 +609,7 @@ let game = null, flip = false;
 const loose = new Array(agents.length).fill(null);
 const sqToCell = sq => (sq >> 3) * W + TRAY_W + (sq & 7);
 const sqX = sq => vx(TRAY_W + (sq & 7) + 0.5), sqY = sq => (sq >> 3) + 0.5;
-function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); $('material').hidden = true; $('gHint').hidden = $('gSolution').hidden = true; game = null; glide = null; trayHand = null; $('gPromo').hidden = true; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
+function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); if (game && game.eng) game.eng.brain.stop(); $('material').hidden = true; $('gHint').hidden = $('gSolution').hidden = true; game = null; glide = null; trayHand = null; $('gPromo').hidden = true; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
 function startGame(pz) {
   const m2 = pz.set === 'm2';
   game = { pz, st: CH.fromFEN(pz.fen, pz.side !== 'b'), m2, history: [], sel: -1, last: null, phase: 'user', userMoves: 0, hint: -1, hintTo: -1, result: '', view: null };
@@ -604,6 +619,7 @@ function startGame(pz) {
   $('gHint').hidden = !(m2 || bookGoal(pz)); $('gSolution').hidden = !(m2 || pz.goal);
   if (pz.goal) $('gMode').textContent = goalText(pz);
   if (pz.goal === 'place') { game.phase = 'place'; missingPieceOnTray(pz); }
+  if (pz.goal === 'win' || pz.goal === 'draw') startEngineGoal(game);
   $('gRestart').textContent = pz.bot ? 'New game' : 'Restart position';
   // with a puzzle the three buttons sit between Previous and Next; in a game New game stays by Take back
   if (pz.bot) $('gUndo').before($('gRestart')); else $('gHint').before($('gRestart'));
@@ -770,7 +786,7 @@ async function loadProgress() {
 }
 function renderProgress() {
   if (!mineOnly) return;
-  const all = PUZZLES.filter(p => p.mine), done = all.filter(p => solved.has(p.num)).length, pct = Math.floor(100 * done / all.length);
+  const all = PUZZLES.filter(p => p.mine && bookOf(p) === book), done = all.filter(p => solved.has(p.num)).length, pct = Math.floor(100 * done / all.length);
   $('progressText').textContent = `${done} of ${all.length} solved`; $('progressPct').textContent = pct + '%';
   $('progressFill').style.width = (100 * done / all.length) + '%';
   const pool = $('poolSel').value, inCh = all.filter(p => pool === 'all' || p.chapter === pool);
@@ -851,7 +867,7 @@ function cheerWin(g) {
   g.cheered = true;
   if (g.bot) { celebrate('You win!', 'Stockfish at Elo ' + g.bot.elo); return; }
   if (!g.pz.mine) { celebrate('Solved!'); return; }
-  const fresh = markSolved(g.pz), all = PUZZLES.filter(p => p.mine), n = all.filter(p => solved.has(p.num)).length;
+  const fresh = markSolved(g.pz), all = PUZZLES.filter(p => p.mine && bookOf(p) === bookOf(g.pz)), n = all.filter(p => solved.has(p.num)).length;
   const inCh = all.filter(p => p.chapter === g.pz.chapter), left = inCh.filter(p => !solved.has(p.num)).length;
   if (fresh && n === all.length) celebrate('The whole book!', `All ${n} puzzles solved`);
   else if (fresh && !left) celebrate('Chapter complete!', `${g.pz.chapter}: ${inCh.length} of ${inCh.length}`);
@@ -864,13 +880,84 @@ const SOLVER_POSITIONS = 120000;
 function goalText(pz) {
   const side = pz.side === 'b' ? 'Black' : 'White';
   if (pz.goal === 'mate') return `${side} to move · mate in ${pz.n}`;
+  const you = (pz.player || pz.side || 'w') === 'b' ? 'Black' : 'White', yours = you === side ? '' : ` · you play ${you}`;
+  if (pz.goal === 'win') return `${side} to move${yours} · win it against Stockfish`;
+  if (pz.goal === 'draw') return `${side} to move${yours} · hold the draw against Stockfish`;
   if (pz.goal === 'place') return `Add a ${PIECE_NAME[pz.place.piece.toLowerCase()]}` + (pz.placeMate ? ' · it is mate at once' : ' · and win');
   if (pz.goal === 'view') return `${side} to move · free play, the book has the explanation`;
   return `${side} to move · ` + (pz.result === 'draw' ? 'find the draw' : 'find the best line');
 }
 function bookWon(g, text) { g.result = 'win'; g.winMsg = text; g.phase = 'done'; refreshGame(); }
 function bookLost(g, text) { g.result = 'lose'; g.loseMsg = text; g.phase = 'done'; refreshGame(); }
+// =================== endgames: win it, or hold the draw, against Stockfish at full strength ===================
+// Many moves can be right in an endgame, so no move list is required: after each of yours, Stockfish judges
+// the position, and the exercise fails only when the win (or the draw) is gone.
+const WIN_KEEP = 1.5, WIN_DONE = 8, DRAW_LOST = -2, DRAW_MOVES = 12;
+let judgeW = null, judgeChain = Promise.resolve();
+function judge(fen, ms = 700) {   // { cp } or { mate } for the side to move, and its best move
+  const run = () => new Promise(res => {
+    if (!judgeW) {
+      const wasm = new URL('bot/stockfish.wasm', location.href).href;
+      judgeW = new Worker(new URL('bot/stockfish.js', location.href).href + '#' + encodeURIComponent(wasm));
+      judgeW.postMessage('uci'); judgeW.postMessage('setoption name Hash value 16');
+    }
+    let last = null;
+    judgeW.onmessage = e => {
+      if (typeof e.data !== 'string') return;
+      for (const l of e.data.split('\n')) {
+        const d = /\bdepth (\d+)/.exec(l), s = /\bscore (cp|mate) (-?\d+)/.exec(l);
+        if (l.startsWith('info ') && d && s && !/bound/.test(l) && !/multipv [2-9]/.test(l)) last = s[1] === 'cp' ? { cp: +s[2] } : { mate: +s[2] };
+        if (l.startsWith('bestmove')) res({ ...(last || { cp: 0 }), best: l.split(' ')[1] });
+      }
+    };
+    judgeW.postMessage('position fen ' + fen);
+    judgeW.postMessage('go movetime ' + ms);
+  });
+  return (judgeChain = judgeChain.then(run, run));
+}
+const pawns = sc => sc.mate !== undefined ? (sc.mate > 0 ? 100 : -100) : sc.cp / 100;
+const fmtPawns = u => u >= 100 ? 'a forced mate for you' : u <= -100 ? 'a forced mate against you' : (u > 0 ? '+' : '') + u.toFixed(1);
+function startEngineGoal(g) {
+  g.phase = 'loading'; refreshGame();
+  import('../bot/bot.js').then(mod => {
+    if (game !== g) return;
+    g.eng = { mod, brain: mod.newGame(fenOf(g.st)) };
+    return judge(fenOf(g.st)).then(sc => {
+      if (game !== g) return;
+      const youFirst = (g.pz.player || g.pz.side || 'w') === (g.pz.side || 'w');
+      g.eng.start = youFirst ? pawns(sc) : -pawns(sc);
+      if (youFirst) { g.phase = 'user'; refreshGame(); return; }
+      g.phase = 'robot'; refreshGame();   // the other side moves first: Stockfish plays it
+      g.eng.brain.think(3000, false, uci => { if (game !== g || g.phase === 'done') return; const m = CH.legal(g.st).find(x => uciOf(x) === uci); if (m) playMove(m); }, () => bookLost(g, 'Stockfish could not start in this browser.'));
+    });
+  }).catch(e => { console.error(e); bookLost(g, 'Stockfish could not start in this browser.'); });
+}
+function engineNext(g) {
+  const pz = g.pz, i = g.history.length, over = g.eng.brain.over(), W = pz.goal === 'win';
+  const first = pz.side || 'w', you = pz.player || first, mine = ((i - 1) % 2 === 0 ? first : first === 'w' ? 'b' : 'w') === you;
+  if (pz.line && (i > pz.line.length || !CH.sameSan(pz.line[i - 1], g.history[i - 1]))) g.offBook = true;
+  if (over === 'mate') { if (mine) bookWon(g, 'Checkmate. Solved!'); else bookLost(g, 'Checkmate. Stockfish wins. Restart to try again.'); return; }
+  if (over) { if (W) bookLost(g, `Draw: ${over}. The win slipped away. Restart to try again.`); else bookWon(g, `Draw: ${over}. Solved!`); return; }
+  if (!mine) { g.phase = 'user'; refreshGame(); return; }
+  g.userMoves = (g.userMoves || 0) + 1;
+  g.phase = 'robot'; refreshGame();
+  judge(fenOf(g.st)).then(sc => {
+    if (game !== g || g.phase === 'done') return;
+    const u = -pawns(sc);   // Stockfish is to move: its score, turned to yours
+    // some book wins start at only +1.3 for Stockfish: the bar is lowered to what the position had at the start
+    if (W && u < Math.min(WIN_KEEP, Math.max(0.6, g.eng.start - 0.8))) { bookLost(g, `That lets the win slip: Stockfish now gives ${fmtPawns(u)}. Restart, or see the solution.`); return; }
+    if (W && u >= WIN_DONE && g.eng.start < WIN_DONE - 2) { bookWon(g, `Won: Stockfish gives ${fmtPawns(u)}, the rest is technique. Solved!`); return; }
+    if (!W && u <= DRAW_LOST) { bookLost(g, `That loses: Stockfish now gives ${fmtPawns(u)}. Restart to try again.`); return; }
+    if (!W && g.userMoves >= DRAW_MOVES && Math.abs(u) < 1) { bookWon(g, `Held: ${DRAW_MOVES} moves and still a draw. Solved!`); return; }
+    g.eng.brain.think(3000, false, uci => {
+      if (game !== g || g.phase === 'done') return;
+      const m = CH.legal(g.st).find(x => uciOf(x) === uci);
+      if (m) playMove(m); else bookLost(g, 'Stockfish could not move.');
+    }, () => bookLost(g, 'Stockfish could not start in this browser.'));
+  });
+}
 function bookNext(g) {
+  if (g.eng) { engineNext(g); return; }
   const pz = g.pz, line = pz.line, i = g.history.length, st = CH.status(g.st);
   if (i % 2 === 0) {   // the robot just answered
     if (!g.offBook && i >= line.length) bookWon(g, pz.result === 'draw' ? 'Draw, as in the book.' : pz.goal === 'mate' ? 'Checkmate. Solved!' : 'Solved, as in the book.');
@@ -1065,7 +1152,7 @@ function refreshGame() {
   else if (g.held && g.held.queued === null) text = `Take the ${PIECE_NAME[agents[g.held.a].t.toLowerCase()]} off the board: click a free place on a tray.`;
   else if (g.phase === 'loading') text = 'Starting Stockfish…';
   else if (g.phase === 'place') text = `Take a ${PIECE_NAME[g.pz.place.piece.toLowerCase()]} from a tray and put it on its square.`;
-  else if (g.phase === 'robot') text = g.bot ? 'Stockfish is thinking…' : g.pz.goal ? 'The robot answers…' : 'Black is thinking…';
+  else if (g.phase === 'robot') text = g.bot || g.eng ? 'Stockfish is thinking…' : g.pz.goal ? 'The robot answers…' : 'Black is thinking…';
   else if (g.phase === 'moving') text = 'Moving…';
   else text = (g.m2 || g.bot || bookGoal(g.pz) ? 'Your move' : side + ' to move') + (st === 'check' ? ' · check' : '');
   if (g.note && performance.now() < g.note.until && !g.result) text = g.note.text;
@@ -1134,7 +1221,9 @@ function playMove(m, byUser = false, dropped = false, chosen = -1) {
   if (m.castle) goals[map.get(sqToCell(m.rookFrom))] = sqToCell(m.rookTo);
   g.history.push(CH.san(g.st, m)); (g.moves = g.moves || []).push(m);
   if (g.bot) g.bot.brain.play(uciOf(m));
+  if (g.eng) g.eng.brain.play(uciOf(m));
   g.st = CH.make(g.st, m); g.last = m; g.sel = -1; g.hint = g.hintTo = -1; g.phase = 'moving';
+  if (g.eng) g.eng.best = null;
   refreshGame();
   const go = () => setTimeout(() => {
     const plan = planFixed(algo, cells.slice(), goals, opt(), carPos);
@@ -1515,6 +1604,7 @@ function hintMove(g) {
   }
   if (!bookGoal(pz)) return null;
   if (!g.offBook && i < pz.line.length) { const m = CH.findSan(g.st, pz.line[i]); if (m) return m; }
+  if (g.eng) return g.eng.best ? CH.legal(g.st).find(x => uciOf(x) === g.eng.best) || null : 'ask';
   if (pz.goal === 'mate') {   // off the book's line but still winning: a move that keeps the mate
     const left = pz.n - (i >> 1), budget = { left: SOLVER_POSITIONS };
     return CH.legal(g.st).find(m => { const s = CH.make(g.st, m); return CH.isMate(s) || (left > 1 && CH.allRepliesLose(s, left - 1, budget) === true); }) || 'Too deep for a hint here. Restart the position to see the book’s way.';
@@ -1527,6 +1617,11 @@ $('gHint').addEventListener('click', () => {
   if (g.phase === 'place') { const sq = g.pz.place.square; g.hint = 'abcdefgh'.indexOf(sq[0]) + (8 - +sq[1]) * 8; say('Hint: the highlighted square.'); return; }
   if (g.phase !== 'user') return;
   const m = hintMove(g);
+  if (m === 'ask') {   // an endgame off the book's line: Stockfish's move, once it has looked
+    say('Asking Stockfish for a hint…'); const fen = fenOf(g.st);
+    judge(fen, 900).then(sc => { if (game !== g || fenOf(g.st) !== fen) return; g.eng.best = sc.best; g.eng.bestFen = fen; $('gHint').click(); });
+    return;
+  }
   if (typeof m === 'string') { say(m); return; }
   if (!m) return;
   g.sel = -1;
