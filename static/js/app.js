@@ -91,11 +91,11 @@ try { if (localStorage.getItem('robo-tab') === 'sizes') showTab('sizes'); } catc
 const sel = $('pzSel'), mineOnly = PUZZLES.some(p => p.mine);
 {
   // with a private file only its puzzles are on offer, by chapter; the starting position stays for Reset and for games
-  const groups = mineOnly ? {} : { classic: 'Classic positions', m2: 'Mate in two', twin: 'Twin mates' }, og = {};
+  const groups = mineOnly ? {} : { twin: 'Twin mates' }, og = {};
   const groupOf = p => mineOnly ? p.chapter : p.set || 'classic';
   if (mineOnly) PUZZLES.forEach(p => { if (p.mine) groups[p.chapter] = p.chapter; });
   for (const g in groups) { og[g] = document.createElement('optgroup'); og[g].label = groups[g]; sel.appendChild(og[g]); }
-  PUZZLES.forEach((p, i) => { if (mineOnly && !p.mine) return; const o = document.createElement('option'); o.value = 'p' + i; o.textContent = p.name; og[groupOf(p)].appendChild(o); });
+  PUZZLES.forEach((p, i) => { if ((mineOnly && !p.mine) || p.hidden) return; const o = document.createElement('option'); o.value = 'p' + i; o.textContent = p.name; og[groupOf(p)].appendChild(o); });
   if (mineOnly) {
     $('goBtn').hidden = $('resetBtn').hidden = true; $('unsolvedBtn').hidden = false; $('progressBox').hidden = false;
     $('poolLbl').textContent = 'Chapter'; $('pickLbl').textContent = 'Puzzle';
@@ -103,11 +103,11 @@ const sel = $('pzSel'), mineOnly = PUZZLES.some(p => p.mine);
     const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; $('poolSel').appendChild(o); };
     add('all', 'The whole book');
     for (const g in groups) add(g, g);
-  } else { const o = document.createElement('option'); o.value = 'rand'; o.textContent = 'Random generated position'; og.classic.appendChild(o); }
+  } else $('poolWrap').hidden = true;   // one group only: nothing to choose from
 }
 try { const v = localStorage.getItem('robo-pool'); if (v) $('poolSel').value = v; } catch (e) {}
 if (!$('poolSel').value) $('poolSel').value = 'all';
-const inPool = (p, pool) => mineOnly ? p.mine && (pool === 'all' || p.chapter === pool) : pool === 'all' || (p.set || 'classic') === pool;
+const inPool = (p, pool) => mineOnly ? p.mine && (pool === 'all' || p.chapter === pool) : !p.hidden && (pool === 'all' || (p.set || 'classic') === pool);
 $('poolSel').addEventListener('change', () => { try { localStorage.setItem('robo-pool', $('poolSel').value); } catch (e) {} });
 const algosEl = $('algos');
 ['fast', 'nudge', 'ca', 'pibt', 'seq', 'naive'].map(k => [k, ALGOS[k]]).forEach(([k, A]) => {
@@ -133,7 +133,6 @@ function puzzleFor(key) {
 }
 function randomKey() {
   const pool = $('poolSel').value;
-  if (!mineOnly && pool !== 'm2' && pool !== 'twin' && Math.random() < (pool === 'all' ? 0.08 : 0.15)) return 'rand';
   const ids = PUZZLES.map((p, i) => i).filter(i => inPool(PUZZLES[i], pool));
   let k; do { k = 'p' + ids[Math.floor(Math.random() * ids.length)]; } while (k === currentKey && ids.length > 1);
   return k;
@@ -334,7 +333,8 @@ $('trailBtn').addEventListener('click', () => setTrails(!$('optTrails').checked)
 try { const v = localStorage.getItem('robo-side'); if (v !== null) $('optSide').checked = v === '1'; } catch (e) {}
 $('optSide').addEventListener('change', () => { try { localStorage.setItem('robo-side', $('optSide').checked ? '1' : '0'); } catch (e) {} });
 $('optTrails').addEventListener('change', () => setTrails($('optTrails').checked));
-try { const v = localStorage.getItem('robo-trails'); if (v !== null) setTrails(v === '1'); } catch (e) {}
+// online the paths are always on at first; on your own computer the page remembers your choice
+try { const v = localStorage.getItem('robo-trails'); if (v !== null && /^(localhost$|127\.)/.test(location.hostname)) setTrails(v === '1'); } catch (e) {}
 $('resetBtn').addEventListener('click', () => request('p0'));
 sel.addEventListener('change', () => {
   const p = puzzleFor(sel.value);
@@ -909,7 +909,7 @@ function placeAt(g, sq, a) {
 // =================== playing Stockfish ===================
 // The bot and its 7 MB engine live in static/bot/ and load only when someone wants to play.
 function botPuzzle() {
-  const elo = Math.max(100, Math.min(3000, Math.round(+$('botElo').value) || 800)), c = $('botColor').value;
+  const elo = Math.max(100, Math.min(3000, Math.round(+$('botElo').value) || 550)), c = $('botColor').value;
   const human = c === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : c;
   $('botElo').value = elo; saveElo(elo);
   return { name: 'Playing Stockfish', desc: `Elo ${elo}. You play ${human === 'w' ? 'White' : 'Black'}.`, fen: PUZZLES[0].fen, bot: { elo, human } };
@@ -1524,8 +1524,8 @@ async function loadElo() {
   if (elo >= 100 && elo <= 3000) $('botElo').value = elo;
 }
 $('botElo').addEventListener('change', () => { const v = Math.round(+$('botElo').value); if (v >= 100 && v <= 3000) saveElo(v); });
-$('botElo').value = 800; $('botColor').value = 'w';
-// with the book: back to the first puzzle not solved yet. Otherwise, on opening, always the same: a game against Stockfish at Elo 800, with you as White
+$('botElo').value = 550; $('botColor').value = 'w';
+// with the book: back to the first puzzle not solved yet. Otherwise, on opening, always the same: a game against Stockfish at Elo 550, with you as White
 if (mineOnly) { showMode('puzzles'); loadProgress().then(() => { renderProgress(); request(firstUnsolved()); }); }
 else { showMode('play'); loadElo().then(() => setTimeout(() => request('bot'), 300)); }
 if (mineOnly) loadElo();

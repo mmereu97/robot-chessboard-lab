@@ -6,7 +6,7 @@
 <title>Robot Chessboard Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="css/style.css?v=20261107m">
+<link rel="stylesheet" href="css/style.css?v=20261107o">
 </head>
 <body>
 <div class="wrap">
@@ -102,9 +102,6 @@
         <p class="lbl" id="poolLbl">Random from</p>
         <select id="poolSel" aria-label="Random pool">
           <option value="all">All positions</option>
-          <option value="m2">Mate in two only</option>
-          <option value="classic">Classic positions only</option>
-          <option value="twin">Twin mates only</option>
         </select>
         </div>
         <p class="lbl" id="pickLbl" style="margin-top:14px">Or pick one</p>
@@ -115,7 +112,7 @@
       <div>
         <p class="lbl">Play Stockfish</p>
         <div class="row">
-          <input type="number" id="botElo" min="100" max="3000" step="50" value="800" aria-label="Stockfish Elo" title="Elo, 100 to 3000">
+          <input type="number" id="botElo" min="100" max="3000" step="50" value="550" aria-label="Stockfish Elo" title="Elo, 100 to 3000">
           <select id="botColor" aria-label="Your color">
             <option value="w">You play White</option>
             <option value="b">You play Black</option>
@@ -191,12 +188,12 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=20261107m"></script>
-<script src="js/puzzles.js?v=20261107m"></script>
-<script src="js/twins.js?v=20261107m"></script>
+<script src="js/engine.js?v=20261107o"></script>
+<script src="js/puzzles.js?v=20261107o"></script>
+<script src="js/twins.js?v=20261107o"></script>
 <script>if (/^(localhost$|127\.)/.test(location.hostname)) document.write('<script src="js/puzzles-private.js"><\/script>');</script>
-<script src="js/chess.js?v=20261107m"></script>
-<script src="js/pieces.js?v=20261107m"></script>
-<script src="js/app.js?v=20261107m"></script>
+<script src="js/chess.js?v=20261107o"></script>
+<script src="js/pieces.js?v=20261107o"></script>
+<script src="js/app.js?v=20261107o"></script>
 </body>
 </html>

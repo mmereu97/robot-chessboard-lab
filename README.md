@@ -1,6 +1,6 @@
 # Robot Chessboard Lab
 
-A simulator for a self-moving chessboard. All 32 pieces drive from one position to the next, on a board with side trays for the pieces not in play: no teleporting and no touching. Five path planners can be compared on the same change of position, and the mate-in-two puzzles are playable, with the robot defending.
+A simulator for a self-moving chessboard. All 32 pieces drive from one position to the next, on a board with side trays for the pieces not in play: no teleporting and no touching. Five path planners can be compared on the same change of position, and a hundred mate-in-two puzzles from Lichess games are playable, with the robot defending.
 
 **[Open the live app](https://mmereu97.github.io/robot-chessboard-lab/)**
 
@@ -23,7 +23,7 @@ The idea came from watching a commercial robotic board, the Chessnut Move, set u
 
 ## Measured
 
-All five planners on the same chain of 25 changes of position (every position in the app, in order), at 3 squares/s, with a piece diameter of 0.76 of a square. The lower bound is the longest single trip under the best possible assignment; no planner can beat it.
+All five planners on the same chain of 25 changes of position (the 25 positions the app had until 7 November 2026, in order: 13 classic positions and 12 mate-in-two puzzles, in the git history), at 3 squares/s, with a piece diameter of 0.76 of a square. The lower bound is the longest single trip under the best possible assignment; no planner can beat it.
 
 | Planner | Mean duration | Mean piece travel | Mean compute | Smallest distance between pieces |
 |---|---:|---:|---:|---:|
@@ -36,7 +36,6 @@ All five planners on the same chain of 25 changes of position (every position in
 
 - The default planner finishes about 30% above the lower bound, roughly 21 times faster than moving one piece at a time.
 - Every plan completed, and no two pieces came closer than their diameter. The fallbacks are visible in the app: the two sequential planners can finish with serialized PIBT when their heuristic loops.
-- The 12 mate-in-two puzzles were checked with the app's own solver: each has exactly one key move.
 
 Pieces step aside was added later and measured on the same chain with the same diameter: a mean of **4.4 s**, against 2.7 s for Fastest reset, with about 3.6 pieces per change stepping aside, by 0.07 of a square on average and 0.41 at most, and the circles never closer than their diameter. On 80 random changes at a diameter of 0.78 it could not place a trip 3 times; it then uses Fastest reset and the comparison table marks it as a fallback. Above a diameter of about 0.84 this happens more often, because a row has little room left to open.
 
@@ -91,7 +90,7 @@ Pieces are not tied to parking places: every plan starts from where the pieces r
 
 ## Play Stockfish
 
-Set an Elo from 100 to 3000, pick a color and press Play Stockfish: the robots carry out both sides' moves on the board. The bot is the one from [chess-analysis-board](https://github.com/mmereu97/chess-analysis-board), copied with its calibration. Below Elo 1320 it plays and errs like a person: sound opening moves, moves played for an idea, instinctive checks, a rare blunder. An option, off by default, makes it stop making mistakes once it is a rook or more down; its Elo was calibrated with that rule on, so without it the bot is a little weaker when behind. From 1320 up it is Stockfish's own strength limit. Playing Black turns the board around. Games and puzzles are two tabs, and a win gets three seconds of fireworks. During a game a bar beside the board shows who stands better; a second Stockfish at full strength evaluates each position for 0.8 s, whatever the bot's Elo, and the bar can be switched off. Take back returns to your last turn: your move and the bot's answer are undone and the robots put the pieces back, captured ones included. The button counts how many times you used it. Under the board, each side's captures and who is ahead in material, by how many points (pawn 1, knight and bishop 3, rook 5, queen 9). The Elo you last played at is remembered, in the browser and, under serve.py, in lab-settings.json (ignored by git). The page opens on a game, with you as White against Elo 800; the engine starts with Stockfish's first move.
+Set an Elo from 100 to 3000, pick a color and press Play Stockfish: the robots carry out both sides' moves on the board. The bot is the one from [chess-analysis-board](https://github.com/mmereu97/chess-analysis-board), copied with its calibration. Below Elo 1320 it plays and errs like a person: sound opening moves, moves played for an idea, instinctive checks, a rare blunder. An option, off by default, makes it stop making mistakes once it is a rook or more down; its Elo was calibrated with that rule on, so without it the bot is a little weaker when behind. From 1320 up it is Stockfish's own strength limit. Playing Black turns the board around. Games and puzzles are two tabs, and a win gets three seconds of fireworks. During a game a bar beside the board shows who stands better; a second Stockfish at full strength evaluates each position for 0.8 s, whatever the bot's Elo, and the bar can be switched off. Take back returns to your last turn: your move and the bot's answer are undone and the robots put the pieces back, captured ones included. The button counts how many times you used it. Under the board, each side's captures and who is ahead in material, by how many points (pawn 1, knight and bishop 3, rook 5, queen 9). The Elo you last played at is remembered, in the browser and, under serve.py, in lab-settings.json (ignored by git). The page opens on a game, with you as White against Elo 550; the engine starts with Stockfish's first move.
 
 Below Elo 500 the brain cannot get any weaker, so part of its moves are chosen at random: from none at 500 to 80% at 100, for a child's first games. These levels are a slope, not a measurement. Against level 500, level 100 lost all of 14 games and level 300 lost 13 and drew one, so they are weaker, but their numbers are not calibrated Elo as the levels from about 540 up are.
 
@@ -116,7 +115,8 @@ No packages are needed, only Python 3.8+ (or nothing at all, see below).
 | `static/css/style.css` | Colors, fonts, layout (light and dark theme) |
 | `static/js/engine.js` | Motion planning: grid, assignment (Hungarian, bottleneck), sequential planner, Cooperative A\*, PIBT, the fastest-reset optimizer, collision checking |
 | `static/js/pieces.js` | The piece images (cburnett set, see License) |
-| `static/js/puzzles.js` | Puzzle database (FEN positions). Add your own here |
+| `static/js/puzzles.js` | The starting position; add your own puzzles here |
+| `static/js/twins.js` | The hundred twin mates, written by `tools/twin-mates` |
 | `static/js/chess.js` | Chess rules: legal moves, check, mate-in-two solver, robot defence |
 | `static/js/app.js` | Drawing, animation, buttons, playing moves |
 | `static/bot/` | The Stockfish bot: its brain and driver (`bot.js`), the engine, chess.js, the openings database |
@@ -128,7 +128,7 @@ No packages are needed, only Python 3.8+ (or nothing at all, see below).
 Add a line to `PUZZLES` in `static/js/puzzles.js`:
 
 ```js
-{ name: 'Mate in two #79', desc: 'White to move.', fen: '6k1/5ppp/8/8/8/8/5PPP/3R2K1', set: 'm2' },
+{ name: 'My mate in two', desc: 'White to move.', fen: '6k1/5ppp/8/8/8/8/5PPP/3R2K1', set: 'm2' },
 ```
 
 **Twin mates** are a hundred mate-in-two puzzles where each defence needs its own mate; the robot chooses the defence at random, so the same puzzle can be played several ways. A program in `tools/twin-mates` found them among the 820,000 mate-in-two puzzles of the [Lichess puzzle database](https://database.lichess.org/#puzzles) (CC0); each comes from a real game on lichess.org, named in its description.
