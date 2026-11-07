@@ -1,7 +1,8 @@
 """Run this file in PyCharm (right-click > Run 'serve') to open the robot chessboard lab.
 
 It serves the static/ folder on localhost and opens it in your browser. The private
-puzzles you have solved are kept in puzzle-progress.json, next to this file.
+puzzles you have solved are kept in puzzle-progress.json, next to this file, and the
+level you last played Stockfish at in lab-settings.json.
 If a port is blocked or busy (common on Windows with Hyper-V, WSL or Docker),
 it tries the next one, and finally lets the system pick a free port.
 Stop it with the red square in PyCharm's Run window.
@@ -16,7 +17,12 @@ from pathlib import Path
 
 PORTS = [8000, 8080, 5500, 8765, 3000, 0]  # 0 = any free port chosen by the system
 ROOT = Path(__file__).resolve().parent / "static"
-PROGRESS = Path(__file__).resolve().parent / "puzzle-progress.json"
+HERE = Path(__file__).resolve().parent
+# what the page may keep next to this file: the file, and what a valid content looks like
+STORES = {
+    "/api/progress": (HERE / "puzzle-progress.json", "[]", lambda v: isinstance(v, list) and all(isinstance(n, int) for n in v)),
+    "/api/settings": (HERE / "lab-settings.json", "{}", lambda v: isinstance(v, dict) and all(isinstance(x, (str, int, float, bool)) for x in v.values())),
+}
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -34,23 +40,25 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if self.path != "/api/progress":
+        if self.path not in STORES:
             return super().do_GET()
-        self.reply_json(200, PROGRESS.read_text(encoding="utf-8") if PROGRESS.exists() else "[]")
+        path, empty, _ = STORES[self.path]
+        self.reply_json(200, path.read_text(encoding="utf-8") if path.exists() else empty)
 
     def do_POST(self):
         # This content type makes a browser ask first, so other sites cannot write here.
-        if self.path != "/api/progress" or self.headers.get("Content-Type") != "application/json":
+        if self.path not in STORES or self.headers.get("Content-Type") != "application/json":
             return self.reply_json(404, "{}")
+        path, _, valid = STORES[self.path]
         try:
-            solved = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length", 0)), 100000)))
-            if not isinstance(solved, list) or not all(isinstance(n, int) for n in solved):
+            value = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length", 0)), 100000)))
+            if not valid(value):
                 raise ValueError
         except ValueError:
             return self.reply_json(400, "{}")
-        temp = PROGRESS.with_suffix(".tmp")
-        temp.write_text(json.dumps(solved), encoding="utf-8")
-        temp.replace(PROGRESS)
+        temp = path.with_suffix(".tmp")
+        temp.write_text(json.dumps(value), encoding="utf-8")
+        temp.replace(path)
         self.reply_json(200, "{}")
 
     def log_message(self, fmt, *args):

@@ -2,3 +2,4 @@
 __pycache__/
 static/js/puzzles-private.js
 puzzle-progress.json
+lab-settings.json

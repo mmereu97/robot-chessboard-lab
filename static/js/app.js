@@ -870,7 +870,7 @@ function placeAt(g, sq, a) {
 function botPuzzle() {
   const elo = Math.max(100, Math.min(3000, Math.round(+$('botElo').value) || 800)), c = $('botColor').value;
   const human = c === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : c;
-  $('botElo').value = elo;
+  $('botElo').value = elo; saveElo(elo);
   return { name: 'Playing Stockfish', desc: `Elo ${elo}. You play ${human === 'w' ? 'White' : 'Black'}.`, fen: PUZZLES[0].fen, bot: { elo, human } };
 }
 $('botBtn').addEventListener('click', () => request('bot'));
@@ -1449,7 +1449,21 @@ applyThemeDiameter();
 resize();
 document.fonts && document.fonts.ready.then(() => draw());
 requestAnimationFrame(frame);
+// the level you last played at is kept: in the browser, and next to serve.py when the page comes from it
+const servedLocally = /^(localhost$|127\.)/.test(location.hostname);
+function saveElo(elo) {
+  try { localStorage.setItem('robo-elo', String(elo)); } catch (e) {}
+  if (servedLocally) fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ elo }) }).catch(() => {});
+}
+async function loadElo() {
+  let elo = null;
+  try { elo = +localStorage.getItem('robo-elo') || null; } catch (e) {}
+  if (servedLocally) try { const r = await fetch('/api/settings'); if (r.ok) { const s = await r.json(); if (+s.elo) elo = +s.elo; } } catch (e) {}
+  if (elo >= 100 && elo <= 3000) $('botElo').value = elo;
+}
+$('botElo').addEventListener('change', () => { const v = Math.round(+$('botElo').value); if (v >= 100 && v <= 3000) saveElo(v); });
 $('botElo').value = 800; $('botColor').value = 'w';
 // with the book: back to the first puzzle not solved yet. Otherwise, on opening, always the same: a game against Stockfish at Elo 800, with you as White
 if (mineOnly) { showMode('puzzles'); loadProgress().then(() => { renderProgress(); request(firstUnsolved()); }); }
-else { showMode('play'); setTimeout(() => request('bot'), 300); }
+else { showMode('play'); loadElo().then(() => setTimeout(() => request('bot'), 300)); }
+if (mineOnly) loadElo();
