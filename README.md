@@ -131,7 +131,14 @@ Add a line to `PUZZLES` in `static/js/puzzles.js`:
 { name: 'Mate in two #79', desc: 'White to move.', fen: '6k1/5ppp/8/8/8/8/5PPP/3R2K1', set: 'm2' },
 ```
 
-Puzzles of your own can stay off the public site: put them in `static/js/puzzles-private.js`, which git ignores and the page loads only on localhost (run `serve.py`). The file calls `PUZZLES.push(...)` with the same fields, plus `mine: true` and `chapter`, the group in the list, and optionally `sol`, the text that Show solution displays. With such a file, the page offers only its puzzles.
+Puzzles of your own can stay off the public site: put them in `static/js/puzzles-private.js`, which git ignores and the page loads only on localhost (run `serve.py`). The file calls `PUZZLES.push(...)` with the same fields, plus `mine: true` and `chapter`, the group in the list, and optionally `sol`, the text that Show solution displays. With such a file, the page offers only its puzzles, and Random from lists its chapters.
+
+A puzzle can also have a `goal`, with `line`, the book's main line in SAN, and `side: 'b'` when Black moves first (the board then turns around):
+
+- `goal: 'mate', n`: mate in n. The robot plays the book's replies. A different move counts if the solver proves that it still forces mate, and the robot then defends as long as it can.
+- `goal: 'line'`: the book's line, and only that; `result: 'draw'` when the aim is a draw.
+- `goal: 'place', place: { piece, square }`: click the square for a missing piece, which drives there from a tray. With `placeMate`, any square that gives mate counts.
+- `goal: 'view'`: free play, with the solution to read.
 
 `set: 'm2'` makes the robot defend with Black and checks for mate in two; leave it out for free play. Only the piece-placement part of the FEN is needed. No side may have more pieces of a type than a normal set (e.g. two white queens), because the real trays only hold one set.
 

@@ -141,7 +141,7 @@ function leftovers(board, agents, starts) {
 function targetConfig(fen, agents, starts) {
   const board = parseFEN(fen);
   const need = {};
-  FULL_SET.forEach(t => need[t] = (need[t] || 0) + 1);
+  (agents ? agents.map(ag => ag.t) : FULL_SET).forEach(t => need[t] = (need[t] || 0) + 1);
   const cfg = new Map();
   for (const [c, t] of board) { cfg.set(c, t); need[t]--; }
   const sides = { left: [], right: [] };

@@ -142,6 +142,44 @@ const CH = (() => {
     const n = make(st, m);
     return s + (isMate(n) ? '#' : inCheck(n) ? '+' : '');
   }
-  return { fromFEN, legal, make, inCheck, isMate, status, mateIn1, defend, mateIn2Keys, san, NAME };
+  // the moves of a book, as printed: annotations and the promotion's "=" do not count, nor does a needless or missing file or rank
+  const plainSan = s => s.replace(/[+#!?=]/g, '').replace(/0-0-0/, 'O-O-O').replace(/0-0/, 'O-O');
+  const sanKey = s => { const m = /^([KQRBN]?)[a-h]?[1-8]?x?([a-h][1-8])([QRBN]?)$/.exec(s); return m ? m[1] + m[2] + m[3] : s; };
+  function findSan(st, text) {
+    const w = plainSan(text), L = legal(st), exact = L.find(m => plainSan(san(st, m)) === w);
+    if (exact) return exact;
+    const near = L.filter(m => sanKey(plainSan(san(st, m))) === sanKey(w));
+    return near.length === 1 ? near[0] : null;
+  }
+  const sameSan = (a, b) => sanKey(plainSan(a)) === sanKey(plainSan(b));
+  // Can the side to move force mate within n moves? true, false, or null when the budget of positions ran out.
+  function forcedMate(st, n, budget) {
+    if (budget.left-- <= 0) return null;
+    const next = legal(st).map(m => make(st, m));
+    if (next.some(isMate)) return true;
+    if (n <= 1) return false;
+    let unknown = false;
+    next.sort((a, b) => inCheck(b) - inCheck(a));
+    for (const s of next) { const v = allRepliesLose(s, n - 1, budget); if (v === true) return true; if (v === null) unknown = true; }
+    return unknown ? null : false;
+  }
+  function allRepliesLose(st, n, budget) {
+    const replies = legal(st);
+    if (!replies.length) return false;   // stalemate
+    let unknown = false;
+    for (const r of replies) { const v = forcedMate(make(st, r), n, budget); if (v === false) return false; if (v === null) unknown = true; }
+    return unknown ? null : true;
+  }
+  // the reply that holds out longest against a mate in n
+  function longestDefence(st, n, budget) {
+    let best = null, bd = -1;
+    for (const r of legal(st)) {
+      const s = make(st, r); let d = n + 1;
+      for (let k = 1; k <= n; k++) if (forcedMate(s, k, budget) === true) { d = k; break; }
+      if (d > bd || (d === bd && Math.random() < 0.3)) { bd = d; best = r; }
+    }
+    return best;
+  }
+  return { fromFEN, legal, make, inCheck, isMate, status, mateIn1, defend, mateIn2Keys, san, NAME, findSan, sameSan, allRepliesLose, longestDefence };
 })();
 if (typeof module !== 'undefined') module.exports = CH;
