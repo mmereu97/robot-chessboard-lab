@@ -582,7 +582,7 @@ let game = null, flip = false;
 const loose = new Array(agents.length).fill(null);
 const sqToCell = sq => (sq >> 3) * W + TRAY_W + (sq & 7);
 const sqX = sq => vx(TRAY_W + (sq & 7) + 0.5), sqY = sq => (sq >> 3) + 0.5;
-function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); $('material').hidden = true; game = null; glide = null; trayHand = null; $('gPromo').hidden = true; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
+function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); $('material').hidden = true; $('gHint').hidden = $('gSolution').hidden = true; game = null; glide = null; trayHand = null; $('gPromo').hidden = true; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
 function startGame(pz) {
   const m2 = pz.set === 'm2';
   game = { pz, st: CH.fromFEN(pz.fen, pz.side !== 'b'), m2, history: [], sel: -1, last: null, phase: 'user', userMoves: 0, hint: -1, result: '', view: null };
@@ -593,6 +593,8 @@ function startGame(pz) {
   if (pz.goal) $('gMode').textContent = goalText(pz);
   if (pz.goal === 'place') { game.phase = 'place'; missingPieceOnTray(pz); }
   $('gRestart').textContent = pz.bot ? 'New game' : 'Restart position';
+  // with a puzzle the three buttons sit between Previous and Next; in a game New game stays by Take back
+  if (pz.bot) $('gUndo').before($('gRestart')); else $('gHint').before($('gRestart'));
   $('gNav').hidden = !pz.bot;
   if (pz.bot) startBotGame(pz.bot);
   refreshGame();
