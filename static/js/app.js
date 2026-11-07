@@ -1066,6 +1066,7 @@ function refreshGame() {
   else if (g.phase === 'robot') text = g.bot ? 'Stockfish is thinking…' : g.pz.goal ? 'The robot answers…' : 'Black is thinking…';
   else if (g.phase === 'moving') text = 'Moving…';
   else text = (g.m2 || g.bot || bookGoal(g.pz) ? 'Your move' : side + ' to move') + (st === 'check' ? ' · check' : '');
+  if (g.note && performance.now() < g.note.until && !g.result) text = g.note.text;
   $('gStatus').textContent = text; $('gStatus').className = 'game-status ' + cls;
   cv.classList.toggle('holding', !!(g.held && g.held.queued === null));
   $('gPromo').hidden = !g.asking;
@@ -1352,7 +1353,7 @@ function layOnTray(a, pt, then) {
   // a full tray sends the piece to the other one
   if (!(onSide(left) && tryOn(left, pt))) {
     const r = trayRect(!left), across = { x: (r.x0 + r.x1) / 2, y: Math.max(r.y0, Math.min(r.y1, pt.y)) };
-    if (onSide(!left) && tryOn(!left, across)) left = !left;
+    if (onSide(!left) && tryOn(!left, across)) { left = !left; if (game) game.note = { text: `That tray is full: it has ${TRAY_W * 8} places for the robots. The piece went to the other tray.`, until: performance.now() + 5000 }; }
     else if (!plan) at = pt;
   }
   loose[a] = at;
