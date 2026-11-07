@@ -45,6 +45,15 @@ canvas { display: block; width: 100%; height: auto; border-radius: 10px; backgro
 .eval.flip i { top: 0; bottom: auto; }
 .eval span { position: absolute; left: 0; right: 0; text-align: center; font: 600 10px var(--f-mono); letter-spacing: -.3px; }
 @media (prefers-reduced-motion: reduce) { .eval i { transition: none; } }
+.material { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 18px; margin-top: 8px; font-size: 13.5px; }
+.material[hidden] { display: none; }
+.mat-side { display: flex; align-items: center; gap: 6px; min-height: 26px; min-width: 0; flex-wrap: wrap; }
+.mat-side b { font-weight: 600; }
+.mat-side .pcs { display: inline-flex; flex-wrap: wrap; }
+.mat-side .pcs img { width: 22px; height: 22px; margin-right: -7px; }
+.mat-side .pcs img.gap { margin-left: 8px; }
+.mat-side em { font-style: normal; font-family: var(--f-mono); font-weight: 600; color: var(--good); margin-left: 9px; }
+.mat-side .none { color: var(--muted); }
 .bar { height: 3px; background: var(--line); border-radius: 2px; margin-top: 10px; overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; background: var(--accent); }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 1px; margin-top: 14px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }

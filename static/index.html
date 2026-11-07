@@ -6,7 +6,7 @@
 <title>Robot Chessboard Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="css/style.css?v=20261107k">
+<link rel="stylesheet" href="css/style.css?v=20261107l">
 </head>
 <body>
 <div class="wrap">
@@ -27,6 +27,10 @@
       <div class="board-row">
         <div class="eval" id="evalBar" role="img" aria-label="Who stands better" hidden><i id="evalWhite"></i><span id="evalLabel"></span></div>
         <canvas id="cv" width="1270" height="860" aria-label="Chessboard with side trays for pieces not in play"></canvas>
+      </div>
+      <div class="material" id="material" hidden>
+        <div class="mat-side" id="matYou"></div>
+        <div class="mat-side" id="matBot"></div>
       </div>
       <div class="bar"><i id="prog"></i></div>
       <div class="toolbar">
@@ -186,11 +190,11 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=20261107k"></script>
-<script src="js/puzzles.js?v=20261107k"></script>
+<script src="js/engine.js?v=20261107l"></script>
+<script src="js/puzzles.js?v=20261107l"></script>
 <script>if (/^(localhost$|127\.)/.test(location.hostname)) document.write('<script src="js/puzzles-private.js"><\/script>');</script>
-<script src="js/chess.js?v=20261107k"></script>
-<script src="js/pieces.js?v=20261107k"></script>
-<script src="js/app.js?v=20261107k"></script>
+<script src="js/chess.js?v=20261107l"></script>
+<script src="js/pieces.js?v=20261107l"></script>
+<script src="js/app.js?v=20261107l"></script>
 </body>
 </html>

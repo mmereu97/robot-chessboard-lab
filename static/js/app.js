@@ -582,7 +582,7 @@ let game = null, flip = false;
 const loose = new Array(agents.length).fill(null);
 const sqToCell = sq => (sq >> 3) * W + TRAY_W + (sq & 7);
 const sqX = sq => vx(TRAY_W + (sq & 7) + 0.5), sqY = sq => (sq >> 3) + 0.5;
-function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); game = null; glide = null; trayHand = null; $('gPromo').hidden = true; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
+function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); $('material').hidden = true; game = null; glide = null; trayHand = null; $('gPromo').hidden = true; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
 function startGame(pz) {
   const m2 = pz.set === 'm2';
   game = { pz, st: CH.fromFEN(pz.fen, pz.side !== 'b'), m2, history: [], sel: -1, last: null, phase: 'user', userMoves: 0, hint: -1, result: '', view: null };
@@ -699,6 +699,38 @@ function evalPosition(g) {
   const known = es.cache.get(fen);
   if (known) evalPaint(known);
   if (!known && (es.fen !== fen || !es.busy)) evalSearch(fen);
+}
+// =================== material: what each side has taken, and who is ahead by how much ===================
+const VALUE = { Q: 9, R: 5, B: 3, N: 3, P: 1 }, FULL_COUNT = { Q: 1, R: 2, B: 2, N: 2, P: 8 };
+function showMaterial(g) {
+  const show = !!g.bot;
+  $('material').hidden = !show;
+  if (!show) return;
+  const st = g.view !== null && g.frames[g.view] ? g.frames[g.view].st : g.st;
+  const on = {}; st.b.forEach(t => { if (t) on[t] = (on[t] || 0) + 1; });
+  const points = white => Object.keys(VALUE).reduce((s, T) => s + VALUE[T] * (on[white ? T : T.toLowerCase()] || 0), 0);
+  // pieces of a colour no longer on the board (a promoted pawn counts as gone, its new piece as extra)
+  const taken = white => {
+    const out = [];
+    for (const T of 'QRBNP') { const t = white ? T : T.toLowerCase(), pawnsGone = 8 - (on[white ? 'P' : 'p'] || 0); let n = FULL_COUNT[T] - (on[t] || 0);
+      if (T !== 'P' && n < 0) n = 0;
+      if (T === 'P') n = Math.max(0, pawnsGone - Object.keys(FULL_COUNT).filter(x => x !== 'P').reduce((s, x) => s + Math.max(0, (on[white ? x : x.toLowerCase()] || 0) - FULL_COUNT[x]), 0));
+      for (let i = 0; i < n; i++) out.push(t); }
+    return out;
+  };
+  const youWhite = g.bot.human === 'w', diff = points(true) - points(false);
+  const side = (el, label, white) => {
+    const lost = taken(!white), lead = white ? diff : -diff;   // what this side has taken: the other colour's missing pieces
+    el.innerHTML = '';
+    const b = document.createElement('b'); b.textContent = label; el.appendChild(b);
+    const pcs = document.createElement('span'); pcs.className = 'pcs';
+    lost.forEach((t, i) => { const img = document.createElement('img'); img.src = PIECE_SVG[t]; img.alt = PIECE_NAME[t.toLowerCase()]; if (i && lost[i - 1] !== t) img.className = 'gap'; pcs.appendChild(img); });
+    if (!lost.length) { const n = document.createElement('span'); n.className = 'none'; n.textContent = 'nothing taken yet'; pcs.appendChild(n); }
+    el.appendChild(pcs);
+    if (lead > 0) { const e = document.createElement('em'); e.textContent = '+' + lead; e.title = `ahead by ${lead} point${lead > 1 ? 's' : ''}`; el.appendChild(e); }
+  };
+  side($('matYou'), 'You', youWhite);
+  side($('matBot'), 'Stockfish', !youWhite);
 }
 // =================== progress, kept in a file by serve.py and in the browser ===================
 const solved = new Set();
@@ -1000,6 +1032,7 @@ function refreshGame() {
   const g = game, st = CH.status(g.st), side = g.st.white ? 'White' : 'Black';
   if (g.result === 'win') cheerWin(g);
   evalPosition(g);
+  showMaterial(g);
   $('gNext').hidden = !(g.pz.mine && g.result === 'win');
   let text = '', cls = '';
   if (g.view !== null) text = g.view ? `Looking back: after ${moveLabel(g, g.view)}` : 'Looking back: the starting position';
