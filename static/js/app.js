@@ -882,7 +882,7 @@ function startBotGame(bot) {
   $('gMode').textContent = `You play ${bot.human === 'w' ? 'White' : 'Black'} · Stockfish at Elo ${bot.elo}`;
   import('../bot/bot.js').then(mod => {
     if (game !== g || g.phase === 'done') return;
-    g.bot.brain = mod.newGame();
+    g.bot.mod = mod; g.bot.brain = mod.newGame(fenOf(CH.fromFEN(g.pz.fen, true)));
     botNext(g);
   }).catch(e => { console.error(e); botFailed(g); });
 }
@@ -905,6 +905,36 @@ function botNext(g) {
   }, () => botFailed(g));
 }
 const uciOf = m => CH.NAME(m.from) + CH.NAME(m.to) + (m.promo ? m.promo.toLowerCase() : '');
+// =================== taking a move back ===================
+// Back to your last turn: your move and the bot's answer are undone, and the robots put the pieces back.
+const yourTurnAt = (g, ply) => (ply % 2 === 0) === (g.bot.human === 'w');
+function takebackPly(g) {
+  const n = g.history.length;
+  for (let p = n - 1; p >= 0; p--) if (yourTurnAt(g, p)) return p;
+  return -1;
+}
+const canTakeBack = g => !!(g && g.bot && g.bot.mod && !anim && !g.held && !trayHand && ['user', 'robot', 'done'].includes(g.phase) && takebackPly(g) >= 0);
+function takeBack(g) {
+  if (!canTakeBack(g)) return;
+  const k = takebackPly(g);
+  g.bot.brain.stop();
+  viewPly(g, g.history.length);
+  g.history = g.history.slice(0, k); g.moves = g.moves.slice(0, k); g.frames = g.frames.slice(0, k + 1);
+  let st = CH.fromFEN(g.pz.fen, true);
+  for (const m of g.moves) st = CH.make(st, m);
+  g.st = st; g.last = g.moves[k - 1] || null;
+  g.bot.brain = g.bot.mod.newGame(fenOf(CH.fromFEN(g.pz.fen, true)));
+  for (const m of g.moves) g.bot.brain.play(uciOf(m));
+  g.result = ''; g.loseMsg = g.winMsg = g.drawMsg = ''; g.cheered = false; g.confirmResign = false; g.asking = null; g.sel = -1; g.hint = -1;
+  g.takebacks = (g.takebacks || 0) + 1;
+  agents.forEach((ag, a) => { ag.t = g.frames[k].types[a]; });   // a promoted piece is a pawn again
+  g.phase = 'moving'; refreshGame();
+  const plan = planTransition(algo, agents, cells.slice(), fenOf(st).split(' ')[0], opt(), carPos);
+  pileUp(plan);
+  if (plan.carEnd) carPos = { ...plan.carEnd };
+  runSettle(plan, () => { if (game !== g) return; g.frames[k] = snapshot(g); g.phase = 'user'; refreshGame(); });
+}
+$('gUndo').addEventListener('click', () => takeBack(game));
 function resign(g) {
   if (g.bot.brain) g.bot.brain.stop();
   viewPly(g, g.history.length);
@@ -990,9 +1020,11 @@ function refreshGame() {
     $('gFirst').disabled = $('gBack').disabled = viewedPly(g) === 0;
     $('gForward').disabled = $('gLive').disabled = g.view === null;
     $('gResign').hidden = g.phase === 'done';
+    $('gUndo').hidden = false; $('gUndo').disabled = !canTakeBack(g);
+    $('gUndo').textContent = g.takebacks ? `Take back (${g.takebacks})` : 'Take back';
     $('gResign').textContent = g.confirmResign ? 'Really resign?' : 'Resign';
     $('gResign').classList.toggle('confirm', !!g.confirmResign);
-  } else $('gResign').hidden = true;
+  } else $('gResign').hidden = $('gUndo').hidden = true;
 }
 function boardAgents() { const map = new Map(); cells.forEach((c, a) => map.set(c, a)); return map; }
 const isTrayCell = c => cx(c) < TRAY_W || cx(c) >= W - TRAY_W;
@@ -1040,7 +1072,7 @@ function playMove(m, byUser = false, dropped = false) {
     else { cells = cells.slice(); cells[mover] = goals[mover]; }
   }
   if (m.castle) goals[map.get(sqToCell(m.rookFrom))] = sqToCell(m.rookTo);
-  g.history.push(CH.san(g.st, m));
+  g.history.push(CH.san(g.st, m)); (g.moves = g.moves || []).push(m);
   if (g.bot) g.bot.brain.play(uciOf(m));
   g.st = CH.make(g.st, m); g.last = m; g.sel = -1; g.hint = -1; g.phase = 'moving';
   refreshGame();
