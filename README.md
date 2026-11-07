@@ -95,7 +95,7 @@ Set an Elo from 100 to 3000, pick a color and press Play Stockfish: the robots c
 
 Below Elo 500 the brain cannot get any weaker, so part of its moves are chosen at random: from none at 500 to 80% at 100, for a child's first games. These levels are a slope, not a measurement. Against level 500, level 100 lost all of 14 games and level 300 lost 13 and drew one, so they are weaker, but their numbers are not calibrated Elo as the levels from about 540 up are.
 
-A pawn reaching the last rank asks which piece it becomes, as on chess.com; a click on the board takes the move back.
+A pawn reaching the last rank waits there: click a queen, rook, bishop or knight of yours on a tray (they are ringed), and that piece drives to the square while the pawn goes off the board. Buttons under the board do the same, and a click on the board takes the move back.
 
 Missed a move? The buttons under the move list, the arrow keys (← →, ↑ for the first position, ↓ for the current one) or a click on a move show any earlier position. Only the picture changes: the game, the engine and the robots carry on underneath, and a click on the board returns to the current move. Resign asks once more before it ends the game, and the moves can still be looked through afterwards.
 

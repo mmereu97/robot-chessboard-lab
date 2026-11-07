@@ -504,12 +504,18 @@ function draw() {
   if (game && game.trayQueue) P[game.trayQueue.a] = game.trayQueue.pt;
   const dragged = drag && drag.moved ? drag.a : -1, inHand = review ? -1 : handPiece();
   glideOver(P, review);
+  const promo = game && game.asking && !review ? game.asking : null;
+  if (promo) P[boardAgents().get(sqToCell(promo.ms[0].from))] = cellXY(sqToCell(promo.ms[0].to));   // the pawn waits on the last rank
   drawGameMarks();
   for (const a of order) {
     if (review) drawPiece({ ...agents[a], t: review.types[a] }, P[a], 0);
     else if (a !== dragged && a !== inHand) drawPiece(agents[a], P[a], moving[a]);
   }
   drawGameDots();
+  if (promo) for (const a of promoChoices(game)) {   // the pieces it can become, ringed on the trays
+    ctx.strokeStyle = tok['--accent']; ctx.lineWidth = 0.05; ctx.setLineDash([0.1, 0.07]);
+    ctx.beginPath(); ctx.arc(vx(P[a].x), P[a].y, pieceBase() / 2 + 0.06, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  }
   if (dragged >= 0) drawPiece(agents[dragged], { x: mouse.x, y: mouse.y, screen: true }, 1);
   if (inHand >= 0) {
     // where it would land, then the piece itself on the cursor
@@ -1002,7 +1008,7 @@ function refreshGame() {
   else if (g.result === 'lose') { text = g.loseMsg || 'Not mate in two.'; cls = 'lose'; }
   else if (st === 'mate') { text = 'Checkmate. ' + (g.st.white ? 'Black' : 'White') + ' wins.'; cls = 'win'; }
   else if (st === 'stalemate') { text = 'Stalemate.'; }
-  else if (g.asking) text = 'Promote to:';
+  else if (g.asking) text = promoChoices(g).length ? 'Promotion: click a piece of yours on a tray' : 'Promote to:';
   else if (trayHand && trayHand.moved) text = g.phase === 'place' && agents[trayHand.a].t === placeType(g.pz) ? `Put the ${PIECE_NAME[agents[trayHand.a].t.toLowerCase()]} on its square.` : `Put the ${PIECE_NAME[agents[trayHand.a].t.toLowerCase()]} down on either tray.`;
   else if (g.held && g.held.queued === null) text = `Take the ${PIECE_NAME[agents[g.held.a].t.toLowerCase()]} off the board: click a free place on a tray.`;
   else if (g.phase === 'loading') text = 'Starting Stockfish…';
@@ -1041,7 +1047,7 @@ function freeTraySlot(type, nearCell) {
   return c >= 0 ? c : freeTraySlotOn(!left, cellXY(nearCell));
 }
 // physical move: which robot goes where (capture to tray, rook in castling, promotion swap with a tray piece)
-function playMove(m, byUser = false, dropped = false) {
+function playMove(m, byUser = false, dropped = false, chosen = -1) {
   if (anim) { game.deferred = [m, byUser, dropped]; return; }   // the pieces on a tray are still making room
   const g = game, map = boardAgents(), goals = cells.slice();
   const mover = map.get(sqToCell(m.from));
@@ -1058,7 +1064,7 @@ function playMove(m, byUser = false, dropped = false) {
   }
   // a promotion: the piece waiting on a tray comes by itself and the pawn goes off the board;
   // with no such piece on the trays, the pawn's robot takes on the new piece
-  const spare = m.promo ? spareFor(m.promo, sqToCell(m.to)) : -1;
+  const spare = m.promo ? (chosen >= 0 ? chosen : spareFor(m.promo, sqToCell(m.to))) : -1;
   if (m.promo && spare < 0) agents[mover].t = m.promo;
   goals[mover] = sqToCell(m.to);
   if (spare >= 0) {
@@ -1234,17 +1240,28 @@ function legalFrom(sq) {
   if (!game) return [];
   return CH.legal(game.st).filter(m => m.from === sq);
 }
+// pieces on the trays that the pawn can become: a queen, rook, bishop or knight of its colour
+function promoChoices(g) {
+  if (!g || !g.asking) return [];
+  const white = g.st.white, held = g.held ? g.held.a : -1;
+  return agents.map((ag, a) => a).filter(a => a !== held && isTrayCell(cells[a]) && agents[a].white === white && 'QRBN'.includes(agents[a].t.toUpperCase()) && (agents[a].t === agents[a].t.toUpperCase()) === white);
+}
+function promoteWith(g, a) {
+  const { ms } = g.asking, m = ms.find(x => x.promo.toUpperCase() === agents[a].t.toUpperCase());
+  g.asking = null;
+  playMove(m, true, true, a);   // the pawn is already shown on the last rank, so it leaves from there
+}
 // a move onto the last rank asks which piece it becomes; the pawn waits until you say
 function moveOrAsk(ms, dropped = false) {
   if (ms.length === 1) { playMove(ms[0], true, dropped); return; }
-  game.asking = { ms, dropped };
+  game.asking = { ms, dropped }; game.sel = -1;
   refreshGame();
 }
 document.querySelectorAll('#gPromo [data-promo]').forEach(b => b.addEventListener('click', () => {
   const g = game; if (!g || !g.asking) return;
-  const { ms, dropped } = g.asking, m = ms.find(x => x.promo.toUpperCase() === b.dataset.promo);
+  const { ms } = g.asking, m = ms.find(x => x.promo.toUpperCase() === b.dataset.promo);
   g.asking = null;
-  playMove(m, true, dropped);
+  playMove(m, true, true);
 }));
 // =================== a captured piece in the hand ===================
 const PIECE_NAME = { k: 'king', q: 'queen', r: 'rook', b: 'bishop', n: 'knight', p: 'pawn' };
@@ -1343,6 +1360,15 @@ cv.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
   trackMouse(e);
   const g = game, sq = squareAtMouse();
+  if (g && g.asking) {   // a promotion: the piece clicked on a tray comes to the square
+    const a = trayPieceAt(mouse.x, mouse.y);
+    if (a >= 0) {
+      skipClick = true;
+      if (promoChoices(g).includes(a)) promoteWith(g, a);
+      else flashHold('That one cannot be the new piece: take a queen, rook, bishop or knight of yours.');
+      return;
+    }
+  }
   if (g && trayHand) { trayHand.dropping = true; skipClick = true; return; }   // a piece picked up with a click
   if (g && g.view === null && !g.trayQueue && !(g.held && g.held.queued === null)) {
     const a = trayPieceAt(mouse.x, mouse.y);
