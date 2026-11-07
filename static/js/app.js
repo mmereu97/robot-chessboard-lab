@@ -599,6 +599,7 @@ function showMode(m) {
   $('modePuzzles').classList.toggle('on', m === 'puzzles'); $('modePlay').classList.toggle('on', m === 'play');
   $('prevBtn').hidden = $('nextBtn').hidden = m === 'play';
   $('unsolvedBtn').hidden = !mineOnly || m === 'play';
+  evalVisible();
   $('keysHelp').innerHTML = m === 'play' ? '<span class="kbd">← →</span> look through the moves · <span class="kbd">P</span> paths'
     : (mineOnly ? '' : '<span class="kbd">Space</span> random · ') + '<span class="kbd">← →</span> previous / next · ' + (mineOnly ? '' : '<span class="kbd">R</span> reset · ') + '<span class="kbd">P</span> paths';
 }
@@ -620,6 +621,78 @@ function showPuzzleInfo(pz) {
   const help = mineOnly ? (pz.mine && typeof CHAPTER_HELP !== 'undefined' ? [pz.chapter, CHAPTER_HELP[pz.chapter]] : null) : pz.bot ? null : pz.set ? PUBLIC_HELP.m2 : PUBLIC_HELP.classic;
   $('pzHelpTitle').textContent = help ? help[0] : ''; $('pzHelpText').textContent = help ? help[1] : '';
   $('pzDone').hidden = !(pz.mine && solved.has(pz.num));
+}
+// =================== who stands better: a second Stockfish, at full strength, only for this bar ===================
+const EVAL_MS = 800, EVAL_MIN_DEPTH = 6;
+const evalState = { w: null, busy: false, want: null, fen: null, shown: null, cache: new Map() };
+const evalWanted = () => mode === 'play' && $('evalOn').checked;
+function evalVisible() {
+  const show = evalWanted();
+  if ($('evalBar').hidden === show) { $('evalBar').hidden = !show; resize(); }
+  if (show && game && game.bot) evalPosition(game);
+}
+try { const v = localStorage.getItem('robo-eval'); if (v !== null) $('evalOn').checked = v === '1'; } catch (e) {}
+$('evalOn').addEventListener('change', () => { try { localStorage.setItem('robo-eval', $('evalOn').checked ? '1' : '0'); } catch (e) {} evalVisible(); });
+function fenOf(st) {
+  const rows = [];
+  for (let r = 0; r < 8; r++) { let s = '', e = 0; for (let f = 0; f < 8; f++) { const p = st.b[r * 8 + f]; if (!p) e++; else { if (e) { s += e; e = 0; } s += p; } } rows.push(s + (e || '')); }
+  const c = st.castle, rights = (c.K ? 'K' : '') + (c.Q ? 'Q' : '') + (c.k ? 'k' : '') + (c.q ? 'q' : '');
+  return `${rows.join('/')} ${st.white ? 'w' : 'b'} ${rights || '-'} ${st.ep >= 0 ? CH.NAME(st.ep) : '-'} 0 1`;
+}
+// a score is for White: { cp } or { mate }, with mate 0 once it is on the board
+function evalPaint(score) {
+  const flipped = flip, w = score.mate !== undefined ? (score.mate > 0 || Object.is(score.mate, 0) ? 100 : 0) : 100 / (1 + Math.pow(10, -0.00368208 * score.cp));
+  const white = $('evalWhite'), label = $('evalLabel');
+  white.style.height = w + '%';
+  const whiteAhead = w >= 50, atBottom = whiteAhead !== flipped;
+  label.textContent = score.mate !== undefined ? (score.mate ? 'M' + Math.abs(score.mate) : '#') : (Math.abs(score.cp) / 100).toFixed(1);
+  label.style.top = atBottom ? 'auto' : '4px'; label.style.bottom = atBottom ? '4px' : 'auto';
+  label.style.color = whiteAhead ? '#222' : '#eee';
+  $('evalBar').setAttribute('aria-label', `Who stands better: ${score.mate !== undefined ? 'mate' : (score.cp / 100).toFixed(1)} for White`);
+}
+function evalEngine() {
+  if (evalState.w) return evalState.w;
+  const wasm = new URL('bot/stockfish.wasm', location.href).href;
+  const w = evalState.w = new Worker(new URL('bot/stockfish.js', location.href).href + '#' + encodeURIComponent(wasm));
+  w.onmessage = e => { if (typeof e.data === 'string') e.data.split('\n').forEach(l => l && evalLine(l)); };
+  w.onerror = () => { console.error('The evaluation engine could not start'); evalState.w = null; evalState.busy = false; };
+  w.postMessage('uci'); w.postMessage('setoption name Hash value 16');
+  return w;
+}
+function evalLine(l) {
+  const es = evalState;
+  if (l.startsWith('bestmove')) {
+    es.busy = false;
+    if (es.want) { const f = es.want; es.want = null; evalSearch(f); }
+    return;
+  }
+  if (!l.startsWith('info ') || !es.fen) return;
+  const d = /\bdepth (\d+)/.exec(l), s = /\bscore (cp|mate) (-?\d+)/.exec(l);
+  if (!d || !s || +d[1] < EVAL_MIN_DEPTH || /bound/.test(l) || /multipv [2-9]/.test(l)) return;
+  const sign = es.fen.split(' ')[1] === 'w' ? 1 : -1, n = +s[2] * sign;
+  const score = s[1] === 'cp' ? { cp: n } : { mate: n };
+  es.cache.set(es.fen, score);
+  if (es.shown === es.fen) evalPaint(score);
+}
+function evalSearch(fen) {
+  const es = evalState, w = evalEngine();
+  if (es.busy) { es.want = fen; w.postMessage('stop'); return; }
+  es.busy = true; es.fen = fen;
+  w.postMessage('position fen ' + fen);
+  w.postMessage('go movetime ' + EVAL_MS);
+}
+function evalPosition(g) {
+  if (!g.bot || !evalWanted()) return;
+  const es = evalState, st = g.view !== null && g.frames[g.view] ? g.frames[g.view].st : g.st, fen = fenOf(st);
+  $('evalBar').classList.toggle('flip', flip);
+  if (es.shown === fen) { if (es.cache.has(fen)) evalPaint(es.cache.get(fen)); return; }   // until the engine has a word, the bar stays as it was
+  es.shown = fen;
+  const over = CH.status(st);
+  if (over === 'mate') es.cache.set(fen, { mate: st.white ? -0 : 0 });
+  else if (over === 'stalemate') es.cache.set(fen, { cp: 0 });
+  const known = es.cache.get(fen);
+  if (known) evalPaint(known);
+  if (!known && (es.fen !== fen || !es.busy)) evalSearch(fen);
 }
 // =================== progress, kept in a file by serve.py and in the browser ===================
 const solved = new Set();
@@ -890,6 +963,7 @@ function refreshGame() {
   if (!game) return;
   const g = game, st = CH.status(g.st), side = g.st.white ? 'White' : 'Black';
   if (g.result === 'win') cheerWin(g);
+  evalPosition(g);
   $('gNext').hidden = !(g.pz.mine && g.result === 'win');
   let text = '', cls = '';
   if (g.view !== null) text = g.view ? `Looking back: after ${moveLabel(g, g.view)}` : 'Looking back: the starting position';
