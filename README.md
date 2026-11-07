@@ -131,6 +131,8 @@ Add a line to `PUZZLES` in `static/js/puzzles.js`:
 { name: 'Mate in two #79', desc: 'White to move.', fen: '6k1/5ppp/8/8/8/8/5PPP/3R2K1', set: 'm2' },
 ```
 
+**Twin mates** are a hundred mate-in-two puzzles where each defence needs its own mate; the robot chooses the defence at random, so the same puzzle can be played several ways. A program in `tools/twin-mates` found them among the 820,000 mate-in-two puzzles of the [Lichess puzzle database](https://database.lichess.org/#puzzles) (CC0); each comes from a real game on lichess.org, named in its description.
+
 Puzzles of your own can stay off the public site: put them in `static/js/puzzles-private.js`, which git ignores and the page loads only on localhost (run `serve.py`). The file calls `PUZZLES.push(...)` with the same fields, plus `mine: true` and `chapter`, the group in the list, and optionally `sol`, the text that Show solution displays. With such a file, the page opens on the first puzzle not solved yet and offers only its puzzles, by chapter, with no Random. It shows a progress bar and a tick on each solved puzzle; `serve.py` keeps them in `puzzle-progress.json`, which git ignores, and the browser keeps a copy. A `CHAPTER_HELP` object in the file gives each chapter's explanation.
 
 A puzzle can also have a `goal`, with `line`, the book's main line in SAN, and `side: 'b'` when Black moves first (the board then turns around):

@@ -3,3 +3,6 @@ __pycache__/
 static/js/puzzles-private.js
 puzzle-progress.json
 lab-settings.json
+tools/twin-mates/*.csv
+tools/twin-mates/*.jsonl
+tools/twin-mates/chosen.json

@@ -91,7 +91,7 @@ try { if (localStorage.getItem('robo-tab') === 'sizes') showTab('sizes'); } catc
 const sel = $('pzSel'), mineOnly = PUZZLES.some(p => p.mine);
 {
   // with a private file only its puzzles are on offer, by chapter; the starting position stays for Reset and for games
-  const groups = mineOnly ? {} : { classic: 'Classic positions', m2: 'Mate in two' }, og = {};
+  const groups = mineOnly ? {} : { classic: 'Classic positions', m2: 'Mate in two', twin: 'Twin mates' }, og = {};
   const groupOf = p => mineOnly ? p.chapter : p.set || 'classic';
   if (mineOnly) PUZZLES.forEach(p => { if (p.mine) groups[p.chapter] = p.chapter; });
   for (const g in groups) { og[g] = document.createElement('optgroup'); og[g].label = groups[g]; sel.appendChild(og[g]); }
@@ -133,7 +133,7 @@ function puzzleFor(key) {
 }
 function randomKey() {
   const pool = $('poolSel').value;
-  if (!mineOnly && pool !== 'm2' && Math.random() < (pool === 'all' ? 0.08 : 0.15)) return 'rand';
+  if (!mineOnly && pool !== 'm2' && pool !== 'twin' && Math.random() < (pool === 'all' ? 0.08 : 0.15)) return 'rand';
   const ids = PUZZLES.map((p, i) => i).filter(i => inPool(PUZZLES[i], pool));
   let k; do { k = 'p' + ids[Math.floor(Math.random() * ids.length)]; } while (k === currentKey && ids.length > 1);
   return k;
@@ -166,7 +166,7 @@ function launch(key, pz, fromStarts) {
   }
   flip = !!(pz.bot && pz.bot.human === 'b') || pz.side === 'b';
   currentKey = key; sel.value = key;
-  $('pzName').textContent = pz.name; showPuzzleInfo(pz); $('pzDesc').textContent = pz.desc + (pz.bot || pz.mine ? '' : ` Opened by: ${lastInput}.`);
+  $('pzName').textContent = pz.name; showPuzzleInfo(pz); $('pzDesc').textContent = pz.desc + (pz.bot || pz.mine || pz.set === 'twin' ? '' : ` Opened by: ${lastInput}.`);
   $('clock').textContent = algo === 'fast' ? 'optimizing paths…' : 'planning paths…'; $('note').textContent = '';
   if (fromStarts) { cells = fromStarts.slice(); loose.fill(null); }
   const go = () => {
@@ -622,9 +622,10 @@ $('modePlay').addEventListener('click', () => goMode('play'));
 const PUBLIC_HELP = {
   classic: ['Classic positions', 'Famous mates and endgames to watch the robots set up. You can move both sides freely.'],
   m2: ['Mate in two', 'White moves, the robot defends with Black, and White mates on the second move. Only a first move that mates against every defence counts.'],
+  twin: ['Twin mates', 'Mate in two, with a twist: after the one move that works, each defence fails in its own way and needs its own mate. The robot picks a defence at random, so play a puzzle again to meet the others. Found by a program among 820,000 mate-in-two puzzles from Lichess games.'],
 };
 function showPuzzleInfo(pz) {
-  const help = mineOnly ? (pz.mine && typeof CHAPTER_HELP !== 'undefined' ? [pz.chapter, CHAPTER_HELP[pz.chapter]] : null) : pz.bot ? null : pz.set ? PUBLIC_HELP.m2 : PUBLIC_HELP.classic;
+  const help = mineOnly ? (pz.mine && typeof CHAPTER_HELP !== 'undefined' ? [pz.chapter, CHAPTER_HELP[pz.chapter]] : null) : pz.bot ? null : PUBLIC_HELP[pz.set || 'classic'];
   $('pzHelpTitle').textContent = help ? help[0] : ''; $('pzHelpText').textContent = help ? help[1] : '';
   $('pzDone').hidden = !(pz.mine && solved.has(pz.num));
 }
@@ -878,7 +879,9 @@ function bookNext(g) {
   g.phase = 'robot'; refreshGame();
   setTimeout(() => {
     if (game !== g) return;
-    const m = CH.findSan(g.st, line[i]);
+    // twin mates: the robot chooses one of the defences, each needing its own mate
+    const text = i === 1 && pz.defences ? pz.defences[Math.floor(Math.random() * pz.defences.length)] : line[i];
+    const m = CH.findSan(g.st, text);
     if (m) playMove(m); else bookLost(g, 'The book’s next move is not possible here. See the solution.');
   }, 450);
 }
