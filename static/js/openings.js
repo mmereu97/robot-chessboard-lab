@@ -152,8 +152,11 @@ $('opStart').addEventListener('click', () => {
 });
 $('opSide').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || b.dataset.side === opSide) return;
+  // your colour always at the bottom: before a game the board turns, during one a new game starts with that colour
+  const g = game, playing = g && g.pz.explore && g.phase !== 'done';
+  if (playing && g.history.length > 2 && !confirm(`Start a new game as ${b.dataset.side === 'w' ? 'White' : 'Black'}?`)) return;
   opSide = b.dataset.side; store('robo-opside', opSide);
-  if (!(game && game.pz.explore && game.history.length)) request('start'); else exploreRefresh();
+  if (playing) { $('botElo').value = opElo(); saveElo(opElo()); exCache = null; request('opgame'); } else request('start');
 });
 $('opList').addEventListener('click', e => {
   const b = e.target.closest('.op-row'); if (!b) return;
