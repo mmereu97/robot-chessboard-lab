@@ -107,6 +107,10 @@ No packages are needed, only Python 3.8+ (or nothing at all, see below).
 - **Terminal:** `python serve.py`.
 - **Without Python:** double-click `static/index.html`.
 
+## Openings
+
+The third tab holds the 3,865 named openings of [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) (CC0), from the first move to the move that gives each its name. Search by name, ECO code or moves (`Najdorf`, `B90`, `e4 c5 Nf3`), click one of the popular families, or browse all of them, largest first. You play one side and the robot plays the other side's book moves; Auto plays a Defense with Black and the rest with White. Ghosts on the board show where your pieces are going: faint, with a dotted outline, on the squares they reach at the end of the line, and stronger, ringed, for your next move. They can be cut down to the next move only, or switched off to play from memory. A move that is not the book's is refused and the robots leave the board as it was; with the ghosts off, a wrong try shows the right move. Hint works as in the puzzles. A learnt opening gets a ✓ in the list, kept in the browser, and from there you can play on against Stockfish at the Elo set under Play Stockfish. `tools/openings/build.js` takes the list out of chess-analysis-board, where it is a tree of moves, checks every line and writes `static/data/openings.json`.
+
 ## Files
 
 | File | What it does |
@@ -119,6 +123,8 @@ No packages are needed, only Python 3.8+ (or nothing at all, see below).
 | `static/js/twins.js` | The hundred twin mates, written by `tools/twin-mates` |
 | `static/js/chess.js` | Chess rules: legal moves, check, mate-in-two solver, robot defence |
 | `static/js/app.js` | Drawing, animation, buttons, playing moves |
+| `static/js/openings.js` | The Openings tab: list, search, ghosts, the robot playing the book |
+| `static/data/openings.json` | The named openings: ECO code, name, moves |
 | `static/bot/` | The Stockfish bot: its brain and driver (`bot.js`), the engine, chess.js, the openings database |
 | `serve.py` | Local web server for PyCharm |
 | `index.html` | Entry page for GitHub Pages; redirects to `static/` |

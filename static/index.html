@@ -6,7 +6,7 @@
 <title>Robot Chessboard Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="css/style.css?v=20261107u">
+<link rel="stylesheet" href="css/style.css?v=20261108a">
 </head>
 <body>
 <div class="wrap">
@@ -59,6 +59,7 @@
         </div>
         <div class="row">
           <button class="btn" id="gNext" type="button" hidden>Next unsolved <span aria-hidden="true">▶</span></button>
+          <button class="btn" id="gOpPlay" type="button" hidden>Play on against Stockfish <span aria-hidden="true">▶</span></button>
           <button class="btn" id="gRestart" type="button">Restart position</button>
           <button class="btn" id="gUndo" type="button" hidden>Take back</button>
           <button class="btn" id="gResign" type="button" hidden>Resign</button>
@@ -72,6 +73,7 @@
       <div class="mode-tabs" role="tablist" aria-label="What to do">
         <button class="mode-tab on" id="modePuzzles" type="button">Puzzles</button>
         <button class="mode-tab" id="modePlay" type="button">Play Stockfish</button>
+        <button class="mode-tab" id="modeOpenings" type="button">Openings</button>
       </div>
       <div class="side-tabs" role="tablist">
         <button class="side-tab on" id="tabMain" type="button">Controls</button>
@@ -128,6 +130,21 @@
         <label style="display:block;margin-top:8px;font-size:13px"><input type="checkbox" id="botFight"> A rook or more down, it stops making mistakes</label>
         <label style="display:block;margin-top:6px;font-size:13px"><input type="checkbox" id="evalOn" checked> Show who stands better, beside the board</label>
       </div>
+      </div>
+      <div class="mode-pane" id="paneOpenings" hidden>
+      <div>
+        <p class="lbl">Openings <span id="opCount"></span></p>
+        <input type="search" class="op-search" id="opSearch" placeholder="Name, ECO or moves: Najdorf, B90, e4 c5" aria-label="Search the openings" autocomplete="off">
+      </div>
+      <div class="op-chips" id="opChips"></div>
+      <div class="op-list" id="opList"></div>
+      <div class="op-opts">
+        <label><span class="lbl">You play</span>
+          <select id="opColor"><option value="auto">Auto: by its name</option><option value="w">White</option><option value="b">Black</option></select></label>
+        <label><span class="lbl">Ghosts</span>
+          <select id="opGhosts"><option value="all">All your pieces</option><option value="next">Next move only</option><option value="off">None: from memory</option></select></label>
+      </div>
+      <p class="sub" style="margin:0;font-size:12.5px">The robot plays the other side's book moves; only the book move is taken from you. Auto plays a Defense with Black, the rest with White. With no ghosts, a wrong try shows the right move. Names and moves: lichess-org/chess-openings.</p>
       </div>
       <div>
         <p class="lbl">Planner</p>
@@ -192,12 +209,13 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=20261107u"></script>
-<script src="js/puzzles.js?v=20261107u"></script>
-<script src="js/twins.js?v=20261107u"></script>
+<script src="js/engine.js?v=20261108a"></script>
+<script src="js/puzzles.js?v=20261108a"></script>
+<script src="js/twins.js?v=20261108a"></script>
 <script>if (/^(localhost$|127\.)/.test(location.hostname)) document.write('<script src="js/puzzles-private.js"><\/script>');</script>
-<script src="js/chess.js?v=20261107u"></script>
-<script src="js/pieces.js?v=20261107u"></script>
-<script src="js/app.js?v=20261107u"></script>
+<script src="js/chess.js?v=20261108a"></script>
+<script src="js/pieces.js?v=20261108a"></script>
+<script src="js/app.js?v=20261108a"></script>
+<script src="js/openings.js?v=20261108a"></script>
 </body>
 </html>

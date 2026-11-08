@@ -143,6 +143,7 @@ $('speed').addEventListener('input', () => { $('speedVal').textContent = speed()
 
 function puzzleFor(key) {
   if (key === 'bot') return botPuzzle();
+  if (key.startsWith('op') || key === 'start' || key === 'botop') return openingFor(key);
   if (key === 'rand') return { name: 'Random position', desc: 'Pieces scattered at random, as a stress test.', fen: randomFEN() };
   return PUZZLES[+key.slice(1)];
 }
@@ -154,7 +155,7 @@ function randomKey() {
 }
 function request(key) {
   const pz = puzzleFor(key);
-  if (key !== 'bot') lastPuzzleKey = key;
+  if (key[0] === 'p') lastPuzzleKey = key;
   if (anim) { pending = { key, pz }; $('queueTag').textContent = 'queued: ' + pz.name; return; }
   launch(key, pz);
 }
@@ -180,7 +181,7 @@ function launch(key, pz, fromStarts) {
   }
   flip = !!(pz.bot && pz.bot.human === 'b') || (pz.player || pz.side) === 'b';
   currentKey = key; sel.value = key;
-  $('pzName').textContent = pz.name; showPuzzleInfo(pz); $('pzDesc').textContent = pz.desc + (pz.bot || pz.mine || pz.set === 'twin' ? '' : ` Opened by: ${lastInput}.`);
+  $('pzName').textContent = pz.name; showPuzzleInfo(pz); $('pzDesc').textContent = pz.desc + (pz.bot || pz.mine || pz.op || pz.set === 'twin' || key === 'start' ? '' : ` Opened by: ${lastInput}.`);
   $('clock').textContent = algo === 'fast' ? 'optimizing paths…' : 'planning paths…'; $('note').textContent = '';
   if (fromStarts) { cells = fromStarts.slice(); loose.fill(null); }
   const go = () => {
@@ -374,6 +375,7 @@ document.addEventListener('keydown', e => {
   if (/INPUT|SELECT|TEXTAREA/.test(tag)) return;
   if (mode === 'play' && !(game && game.bot)) return;
   if (mineOnly && (e.code === 'Space' || e.code === 'KeyR')) return;
+  if (mode === 'openings' && !(game && game.bot) && e.code !== 'KeyP') return;
   if (game && game.bot) {   // a stray key must not end a game against Stockfish; the arrows look through its moves
     const to = { ArrowLeft: viewedPly(game) - 1, ArrowRight: viewedPly(game) + 1, ArrowUp: 0, Home: 0, ArrowDown: game.history.length, End: game.history.length }[e.code];
     if (to !== undefined) { e.preventDefault(); viewPly(game, to); }
@@ -563,6 +565,7 @@ function drawMagnet(p) {
   ctx.beginPath(); ctx.moveTo(x - 0.6, y); ctx.lineTo(x - 0.5, y); ctx.moveTo(x + 0.5, y); ctx.lineTo(x + 0.6, y); ctx.moveTo(x, y - 0.6); ctx.lineTo(x, y - 0.5); ctx.moveTo(x, y + 0.5); ctx.lineTo(x, y + 0.6); ctx.stroke();
   ctx.globalAlpha = 1;
 }
+let pieceAlpha = 1;   // below 1 for the ghosts of an opening
 function drawPiece(ag, p, lifted) {
   if (!flip) { drawPieceUp(ag, p, lifted); return; }
   const x = p.screen ? p.x : vx(p.x), y = p.y;
@@ -576,7 +579,7 @@ function drawPieceUp(ag, p, lifted) {
     ctx.save();
     const inside = fill[ag.white ? 'w' : 'b'];
     if (inside.on) { ctx.fillStyle = inside.color; ctx.beginPath(); ctx.arc(x, y, D / 2, 0, 7); ctx.fill(); }
-    if (theme() === 'ring') { ctx.strokeStyle = tok['--muted']; ctx.globalAlpha = 0.55; ctx.lineWidth = 0.015; ctx.beginPath(); ctx.arc(x, y, D / 2, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
+    if (theme() === 'ring') { ctx.strokeStyle = tok['--muted']; ctx.globalAlpha = 0.55 * pieceAlpha; ctx.lineWidth = 0.015; ctx.beginPath(); ctx.arc(x, y, D / 2, 0, 7); ctx.stroke(); ctx.globalAlpha = pieceAlpha; }
     if (lifted) { ctx.shadowColor = tok['--shadow']; ctx.shadowBlur = 0.12 * S; ctx.shadowOffsetY = 0.04 * S; }
     ctx.drawImage(img, x - size * f.cx, y - size * f.cy, size, size);
     ctx.restore();
@@ -612,11 +615,11 @@ const sqX = sq => vx(TRAY_W + (sq & 7) + 0.5), sqY = sq => (sq >> 3) + 0.5;
 function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); if (game && game.eng) game.eng.brain.stop(); $('material').hidden = true; $('gHint').hidden = $('gSolution').hidden = true; game = null; glide = null; trayHand = null; $('gPromo').hidden = true; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
 function startGame(pz) {
   const m2 = pz.set === 'm2';
-  game = { pz, st: CH.fromFEN(pz.fen, pz.side !== 'b'), m2, history: [], sel: -1, last: null, phase: 'user', userMoves: 0, hint: -1, hintTo: -1, result: '', view: null };
+  game = { pz, st: startSt(pz), m2, history: [], sel: -1, last: null, phase: 'user', userMoves: 0, hint: -1, hintTo: -1, result: '', view: null };
   if (m2) game.keys = CH.mateIn2Keys(game.st);
   $('game').hidden = false; cv.classList.add('clickable');
   $('gMode').textContent = m2 ? 'White to move · mate in two · the robot defends' : 'Free play · you move both sides';
-  $('gHint').hidden = !(m2 || bookGoal(pz)); $('gSolution').hidden = !(m2 || pz.goal);
+  $('gHint').hidden = !(m2 || bookGoal(pz) || pz.op); $('gSolution').hidden = !(m2 || pz.goal);
   if (pz.goal) $('gMode').textContent = goalText(pz);
   if (pz.goal === 'place') { game.phase = 'place'; missingPieceOnTray(pz); }
   if (pz.goal === 'win' || pz.goal === 'draw') startEngineGoal(game);
@@ -625,18 +628,24 @@ function startGame(pz) {
   if (pz.bot) $('gUndo').before($('gRestart')); else $('gHint').before($('gRestart'));
   $('gNav').hidden = !pz.bot;
   if (pz.bot) startBotGame(pz.bot);
+  if (pz.op) startOpening(game);
   refreshGame();
+}
+// the position a game starts from: a FEN, or the exact position an opening led to (castling, en passant)
+function startSt(pz) {
+  if (pz.st0) return { ...pz.st0, b: pz.st0.b.slice(), castle: { ...pz.st0.castle } };
+  return CH.fromFEN(pz.fen, pz.side !== 'b');
 }
 // =================== two modes: puzzles, or a game against Stockfish ===================
 let mode = 'puzzles', lastPuzzleKey = null;
 function showMode(m) {
   mode = m;
-  $('panePuzzles').hidden = m !== 'puzzles'; $('panePlay').hidden = m !== 'play';
-  $('modePuzzles').classList.toggle('on', m === 'puzzles'); $('modePlay').classList.toggle('on', m === 'play');
-  $('prevBtn').hidden = $('nextBtn').hidden = m === 'play';
-  $('unsolvedBtn').hidden = !mineOnly || m === 'play';
+  $('panePuzzles').hidden = m !== 'puzzles'; $('panePlay').hidden = m !== 'play'; $('paneOpenings').hidden = m !== 'openings';
+  $('modePuzzles').classList.toggle('on', m === 'puzzles'); $('modePlay').classList.toggle('on', m === 'play'); $('modeOpenings').classList.toggle('on', m === 'openings');
+  $('prevBtn').hidden = $('nextBtn').hidden = m !== 'puzzles';
+  $('unsolvedBtn').hidden = !mineOnly || m !== 'puzzles';
   evalVisible();
-  $('keysHelp').innerHTML = m === 'play' ? '<span class="kbd">← →</span> look through the moves · <span class="kbd">P</span> paths'
+  $('keysHelp').innerHTML = m === 'openings' ? '<span class="kbd">P</span> paths' : m === 'play' ? '<span class="kbd">← →</span> look through the moves · <span class="kbd">P</span> paths'
     : (mineOnly ? '' : '<span class="kbd">Space</span> random · ') + '<span class="kbd">← →</span> previous / next · ' + (mineOnly ? '' : '<span class="kbd">R</span> reset · ') + '<span class="kbd">P</span> paths';
 }
 function goMode(m) {
@@ -644,10 +653,12 @@ function goMode(m) {
   if (game && game.bot && game.history.length && game.phase !== 'done' && !confirm('Leave this game against Stockfish?')) return;
   showMode(m);
   if (m === 'play') request('bot');
+  else if (m === 'openings') showOpenings();
   else request(lastPuzzleKey || (mineOnly ? firstUnsolved() : 'p1'));
 }
 $('modePuzzles').addEventListener('click', () => goMode('puzzles'));
 $('modePlay').addEventListener('click', () => goMode('play'));
+$('modeOpenings').addEventListener('click', () => goMode('openings'));
 // the chapter's explanation, and whether this puzzle is solved
 const PUBLIC_HELP = {
   classic: ['Classic positions', 'Famous mates and endgames to watch the robots set up. You can move both sides freely.'],
@@ -866,6 +877,7 @@ function cheerWin(g) {
   if (g.cheered) return;
   g.cheered = true;
   if (g.bot) { celebrate('You win!', 'Stockfish at Elo ' + g.bot.elo); return; }
+  if (g.op) { cheerOpening(g); return; }
   if (!g.pz.mine) { celebrate('Solved!'); return; }
   const fresh = markSolved(g.pz), all = PUZZLES.filter(p => p.mine && bookOf(p) === bookOf(g.pz)), n = all.filter(p => solved.has(p.num)).length;
   const inCh = all.filter(p => p.chapter === g.pz.chapter), left = inCh.filter(p => !solved.has(p.num)).length;
@@ -1024,7 +1036,7 @@ function startBotGame(bot) {
   $('gMode').textContent = `You play ${bot.human === 'w' ? 'White' : 'Black'} · Stockfish at Elo ${bot.elo}`;
   import('../bot/bot.js').then(mod => {
     if (game !== g || g.phase === 'done') return;
-    g.bot.mod = mod; g.bot.brain = mod.newGame(fenOf(CH.fromFEN(g.pz.fen, true)));
+    g.bot.mod = mod; g.bot.brain = mod.newGame(fenOf(startSt(g.pz)));
     botNext(g);
   }).catch(e => { console.error(e); botFailed(g); });
 }
@@ -1049,7 +1061,7 @@ function botNext(g) {
 const uciOf = m => CH.NAME(m.from) + CH.NAME(m.to) + (m.promo ? m.promo.toLowerCase() : '');
 // =================== taking a move back ===================
 // Back to your last turn: your move and the bot's answer are undone, and the robots put the pieces back.
-const yourTurnAt = (g, ply) => (ply % 2 === 0) === (g.bot.human === 'w');
+const yourTurnAt = (g, ply) => ((ply + (g.pz.side === 'b' ? 1 : 0)) % 2 === 0) === (g.bot.human === 'w');
 function takebackPly(g) {
   const n = g.history.length;
   for (let p = n - 1; p >= 0; p--) if (yourTurnAt(g, p)) return p;
@@ -1062,10 +1074,10 @@ function takeBack(g) {
   g.bot.brain.stop();
   viewPly(g, g.history.length);
   g.history = g.history.slice(0, k); g.moves = g.moves.slice(0, k); g.frames = g.frames.slice(0, k + 1);
-  let st = CH.fromFEN(g.pz.fen, true);
+  let st = startSt(g.pz);
   for (const m of g.moves) st = CH.make(st, m);
   g.st = st; g.last = g.moves[k - 1] || null;
-  g.bot.brain = g.bot.mod.newGame(fenOf(CH.fromFEN(g.pz.fen, true)));
+  g.bot.brain = g.bot.mod.newGame(fenOf(startSt(g.pz)));
   for (const m of g.moves) g.bot.brain.play(uciOf(m));
   g.result = ''; g.loseMsg = g.winMsg = g.drawMsg = ''; g.cheered = false; g.confirmResign = false; g.asking = null; g.sel = -1; g.hint = g.hintTo = -1;
   g.takebacks = (g.takebacks || 0) + 1;
@@ -1140,6 +1152,7 @@ function refreshGame() {
   evalPosition(g);
   showMaterial(g);
   $('gNext').hidden = !(g.pz.mine && g.result === 'win');
+  $('gOpPlay').hidden = !(g.op && g.result === 'win');
   let text = '', cls = '';
   if (g.view !== null) text = g.view ? `Looking back: after ${moveLabel(g, g.view)}` : 'Looking back: the starting position';
   else if (g.result === 'win') { text = g.winMsg || 'Checkmate. Solved!'; cls = 'win'; }
@@ -1152,9 +1165,9 @@ function refreshGame() {
   else if (g.held && g.held.queued === null) text = `Take the ${PIECE_NAME[agents[g.held.a].t.toLowerCase()]} off the board: click a free place on a tray.`;
   else if (g.phase === 'loading') text = 'Starting Stockfish…';
   else if (g.phase === 'place') text = `Take a ${PIECE_NAME[g.pz.place.piece.toLowerCase()]} from a tray and put it on its square.`;
-  else if (g.phase === 'robot') text = g.bot || g.eng ? 'Stockfish is thinking…' : g.pz.goal ? 'The robot answers…' : 'Black is thinking…';
+  else if (g.phase === 'robot') text = g.bot || g.eng ? 'Stockfish is thinking…' : g.pz.goal || g.op ? 'The robot answers…' : 'Black is thinking…';
   else if (g.phase === 'moving') text = 'Moving…';
-  else text = (g.m2 || g.bot || bookGoal(g.pz) ? 'Your move' : side + ' to move') + (st === 'check' ? ' · check' : '');
+  else text = (g.m2 || g.bot || g.op || bookGoal(g.pz) ? 'Your move' : side + ' to move') + (st === 'check' ? ' · check' : '');
   if (g.note && performance.now() < g.note.until && !g.result) text = g.note.text;
   $('gStatus').textContent = text; $('gStatus').className = 'game-status ' + cls;
   cv.classList.toggle('holding', !!(g.held && g.held.queued === null));
@@ -1394,6 +1407,7 @@ function afterMove() {
   if (g.trayQueue) { const q = g.trayQueue; g.trayQueue = null; layOnTray(q.a, q.pt, afterMove); return; }
   const st = CH.status(g.st);
   if (g.bot) { g.frames[g.history.length] = snapshot(g); botNext(g); return; }
+  if (g.op) { openingNext(g); return; }
   if (bookGoal(g.pz)) { bookNext(g); return; }
   if (!g.m2) { g.phase = 'user'; refreshGame(); return; }
   if (!g.st.white) { // the user just moved
@@ -1422,6 +1436,7 @@ function promoteWith(g, a) {
 }
 // a move onto the last rank asks which piece it becomes; the pawn waits until you say
 function moveOrAsk(ms, dropped = false) {
+  if (game.op && !openingAccepts(game, ms[0])) return;
   if (ms.length === 1) { playMove(ms[0], true, dropped); return; }
   game.asking = { ms, dropped }; game.sel = -1;
   refreshGame();
@@ -1596,6 +1611,7 @@ $('gRestart').addEventListener('click', () => { if (game && !anim) request(curre
 // Hint, in two steps: first the piece that moves, then also the square it goes to. Any turn, not only the first.
 function hintMove(g) {
   const pz = g.pz, i = g.history.length;
+  if (g.op) return openingMove(g);
   if (g.m2) {
     if (i === 0) return g.keys[0];
     const st0 = CH.fromFEN(pz.fen, true);
@@ -1633,6 +1649,7 @@ function drawGameMarks() {
   const g = game; if (!g || anim && anim.kind === 'setup') return;
   const box = (sq, col, a) => { ctx.fillStyle = col; ctx.globalAlpha = a; ctx.fillRect(sqX(sq) - 0.5, sqY(sq) - 0.5, 1, 1); ctx.globalAlpha = 1; };
   const { last, st } = g.view !== null ? g.frames[g.view] : { last: g.last, st: g.st };
+  drawGhosts(g);
   if (last) { box(last.from, tok['--accent'], 0.22); box(last.to, tok['--accent'], 0.32); }
   if (g.hint >= 0) {   // clear on light and dark squares alike: a filled square and a thick ring
     box(g.hint, tok['--accent'], 0.45);
