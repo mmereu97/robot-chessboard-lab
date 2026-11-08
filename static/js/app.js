@@ -444,7 +444,7 @@ const vx = gx => gx + GAP * Math.min(1, Math.max(0, gx - TRAY_W + 0.5)) + GAP * 
 let S = 100, tok = {};
 function readTokens() {
   const cs = getComputedStyle(document.documentElement);
-  ['--good','--panel','--ink','--muted','--line','--sq-light','--sq-dark','--tray','--tray-slot','--accent','--pw','--pw-ink','--pb','--pb-ink','--shadow'].forEach(k => tok[k] = cs.getPropertyValue(k).trim());
+  ['--good','--panel','--ink','--muted','--line','--sq-light','--sq-dark','--tray','--tray-slot','--accent','--pw','--pw-ink','--pb','--pb-ink','--shadow','--arrow'].forEach(k => tok[k] = cs.getPropertyValue(k).trim());
 }
 function resize() {
   const wUnits = W + 2 * GAP + 2 * PAD, hUnits = 8 + 2 * PAD;
@@ -541,6 +541,7 @@ function draw() {
     else if (a !== dragged && a !== inHand) drawPiece(agents[a], P[a], moving[a]);
   }
   drawGameDots();
+  drawBestArrow();
   if (promo) for (const a of promoChoices(game)) {   // the pieces it can become, ringed on the trays
     ctx.strokeStyle = tok['--accent']; ctx.lineWidth = 0.05; ctx.setLineDash([0.1, 0.07]);
     ctx.beginPath(); ctx.arc(vx(P[a].x), P[a].y, pieceBase() / 2 + 0.06, 0, 7); ctx.stroke(); ctx.setLineDash([]);
@@ -1098,6 +1099,25 @@ function takeBack(g) {
   });
 }
 $('gUndo').addEventListener('click', () => takeBack(game));
+// =================== the best move: Stockfish at full strength looks at your position ===================
+// Not the bot's own engine, which may be playing weakly on purpose: the one that judges endgames, for 1.5 s.
+const canAskBest = g => !!(g && g.bot && g.phase === 'user' && g.view === null && !anim && !g.asking && !g.held && !g.thinkingBest);
+$('gBest').addEventListener('click', () => {
+  const g = game; if (!canAskBest(g)) return;
+  const fen = fenOf(g.st), say = t => { g.bestNote = { text: t, ply: g.history.length }; refreshGame(); };
+  g.thinkingBest = true; say('Stockfish is looking for the best move…');
+  judge(fen, 1500).then(sc => {
+    g.thinkingBest = false;
+    if (game !== g || fenOf(g.st) !== fen) { if (game === g) { g.bestNote = null; refreshGame(); } return; }
+    const m = CH.legal(g.st).find(x => uciOf(x) === sc.best);
+    if (!m) { say('Stockfish found no move here.'); return; }
+    const ply = g.history.length, label = `${(ply >> 1) + 1 + (g.pz.side === 'b' ? (ply & 1) : 0)}${g.st.white ? '.' : '...'}${CH.san(g.st, m)}`;
+    const score = sc.mate !== undefined ? (sc.mate > 0 ? `you mate in ${sc.mate}` : `you are mated in ${-sc.mate}`) : `${sc.cp >= 0 ? '+' : ''}${(sc.cp / 100).toFixed(1)} for you`;
+    g.sel = -1; g.best = { from: m.from, to: m.to, ply: g.history.length };
+    g.bestAsked = (g.bestAsked || 0) + 1;   // counted on the button, as Take back is
+    say(`Best move: ${label} (${score}). Play it, or anything else.`);
+  });
+});
 function resign(g) {
   if (g.bot.brain) g.bot.brain.stop();
   viewPly(g, g.history.length);
@@ -1175,6 +1195,7 @@ function refreshGame() {
   else if (g.phase === 'moving') text = 'Moving…';
   else text = (g.m2 || g.bot || bookGoal(g.pz) ? 'Your move' : side + ' to move') + (st === 'check' ? ' · check' : '');
   if (g.note && performance.now() < g.note.until && !g.result) text = g.note.text;
+  if (g.bestNote && g.bestNote.ply === g.history.length && g.phase === 'user' && g.view === null && !g.result) text = g.bestNote.text;   // stays until you move
   $('gStatus').textContent = text; $('gStatus').className = 'game-status ' + cls;
   if (mode === 'openings') exploreRefresh();
   cv.classList.toggle('holding', !!(g.held && g.held.queued === null));
@@ -1187,10 +1208,12 @@ function refreshGame() {
     $('gForward').disabled = $('gLive').disabled = g.view === null;
     $('gResign').hidden = g.phase === 'done';
     $('gUndo').hidden = false; $('gUndo').disabled = !canTakeBack(g);
+    $('gBest').hidden = g.phase === 'done'; $('gBest').disabled = !canAskBest(g);
+    $('gBest').textContent = g.bestAsked ? `Best move (${g.bestAsked})` : 'Best move';
     $('gUndo').textContent = g.takebacks ? `Take back (${g.takebacks})` : 'Take back';
     $('gResign').textContent = g.confirmResign ? 'Really resign?' : 'Resign';
     $('gResign').classList.toggle('confirm', !!g.confirmResign);
-  } else $('gResign').hidden = $('gUndo').hidden = true;
+  } else $('gResign').hidden = $('gUndo').hidden = $('gBest').hidden = true;
 }
 function boardAgents() { const map = new Map(); cells.forEach((c, a) => map.set(c, a)); return map; }
 const isTrayCell = c => cx(c) < TRAY_W || cx(c) >= W - TRAY_W;
@@ -1668,6 +1691,22 @@ function drawGameMarks() {
     const k = st.b.indexOf(st.white ? 'K' : 'k');
     if (k >= 0) { ctx.strokeStyle = '#d23c2c'; ctx.lineWidth = 0.07; ctx.beginPath(); ctx.arc(sqX(k), sqY(k), 0.45, 0, 7); ctx.stroke(); }
   }
+}
+// the best move as an arrow over the pieces, as in chess-analysis-board; it goes once a move is played
+function drawBestArrow() {
+  const g = game; if (!g || !g.best || g.best.ply !== g.history.length || g.view !== null || anim) return;
+  const x1 = sqX(g.best.from), y1 = sqY(g.best.from), x2 = sqX(g.best.to), y2 = sqY(g.best.to);
+  const L = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / L, uy = (y2 - y1) / L, head = 0.42, w = 0.17;
+  const sx = x1 + ux * 0.18, sy = y1 + uy * 0.18, tx = x2 - ux * 0.1, ty = y2 - uy * 0.1, bx = tx - ux * head, by = ty - uy * head;
+  const shape = grow => {   // the shaft and the head, a little wider for the light edge drawn under it
+    ctx.lineWidth = w + grow; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(bx + ux * 0.05, by + uy * 0.05); ctx.stroke();
+    const hw = head * 0.55 + grow / 2;
+    ctx.beginPath(); ctx.moveTo(tx + ux * grow / 2, ty + uy * grow / 2); ctx.lineTo(bx - uy * hw, by + ux * hw); ctx.lineTo(bx + uy * hw, by - ux * hw); ctx.closePath(); ctx.fill();
+  };
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.globalAlpha = 0.5; ctx.strokeStyle = ctx.fillStyle = 'rgba(255,255,255,.9)'; shape(0.07);
+  ctx.globalAlpha = 0.9; ctx.strokeStyle = ctx.fillStyle = tok['--arrow'] || '#17796b'; shape(0);
+  ctx.restore();
 }
 function drawGameDots() {
   const g = game; if (!g || anim || g.sel < 0) return;

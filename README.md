@@ -98,6 +98,8 @@ A pawn reaching the last rank waits there: click a queen, rook, bishop or knight
 
 Missed a move? The buttons under the move list, the arrow keys (← →, ↑ for the first position, ↓ for the current one) or a click on a move show any earlier position. Only the picture changes: the game, the engine and the robots carry on underneath, and a click on the board returns to the current move. Resign asks once more before it ends the game, and the moves can still be looked through afterwards.
 
+Best move asks Stockfish at full strength, whatever the bot's Elo, for 1.5 s: an arrow on the board, as in chess-analysis-board, shows the move, and the line under the board names it with the evaluation. It stays until a move is played. The button counts how many times it was used in the game. It works in the games under Openings too.
+
 ## Run
 
 No packages are needed, only Python 3.8+ (or nothing at all, see below).
