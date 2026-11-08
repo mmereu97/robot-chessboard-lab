@@ -23,7 +23,9 @@ if (stored('robo-opghosts')) $('opGhosts').value = stored('robo-opghosts');
 if (stored('robo-opadv') === '1') $('opAdv').checked = true;
 if (stored('robo-exalong') === '0') $('exAlong').checked = false;
 const esc = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-const familyOf = name => name.split(/[:,]/)[0].trim();
+// the White systems are found under other names too ("Queen's Pawn Game: London System"): they get their own family
+const familyOf = name => (/London System/.exec(name) || /Colle System/.exec(name) || /Torre Attack/.exec(name) || [name.split(/[:,]/)[0].trim()])[0];
+const moveId = m => m.from + '-' + m.to + (m.promo || '');
 // moves numbered as in a game, starting at ply `from`: 3...Bf5 4.Ng3
 function movesText(moves, from = 0, upTo = 99) {
   const out = moves.slice(from, from + upTo).map((m, k) => {
@@ -38,21 +40,22 @@ function loadOpenings() {
   if (OPS) return Promise.resolve(OPS);
   return fetch('data/openings.json').then(r => r.json()).then(d => {
     OPS = d; OPS.family = d.name.map(familyOf); OPS.split = d.moves.map(m => m.split(' '));
-    // every position on every line, to recognise a line by the position, whatever the move order
-    OPS.keys = OPS.split.map(line => {
-      let st = CH.fromFEN(PUZZLES[0].fen, true); const k = [keyOf(st)];
-      for (const san of line) { st = CH.make(st, CH.findSan(st, san)); k.push(keyOf(st)); }
-      return k;
-    });
-    OPS.final = OPS.split.map(line => { let st = CH.fromFEN(PUZZLES[0].fen, true); for (const san of line) st = CH.make(st, CH.findSan(st, san)); return st.b; });
+    // each line as moves (from-to) and as its final position, to recognise it whatever the move order
+    OPS.ids = []; OPS.final = []; OPS.finalKey = [];
+    for (const line of OPS.split) {
+      let st = CH.fromFEN(PUZZLES[0].fen, true); const ids = [];
+      for (const san of line) { const m = CH.findSan(st, san); ids.push(moveId(m)); st = CH.make(st, m); }
+      OPS.ids.push(ids); OPS.final.push(st.b); OPS.finalKey.push(keyOf(st));
+    }
     OPS.byMoves = new Map(d.moves.map((m, i) => [m, i]));
     return d;
   });
 }
 // of some lines of one family, the one to follow: chosen above, or the one that stays longest on their busiest path
-function mainOf(f, list) {
+function mainOf(f, list, track) {
   const want = OP_MAIN[f] && OPS.byMoves.get(OP_MAIN[f]);
   if (want !== undefined && list.includes(want)) return want;
+  if (track && list.some(i => track.has(i))) list = list.filter(i => track.has(i));
   const count = new Map();
   for (const i of list) for (let p = 1; p <= OPS.split[i].length; p++) { const k = OPS.split[i].slice(0, p).join(' '); count.set(k, (count.get(k) || 0) + 1); }
   let best = list[0], bs = -1;
@@ -65,24 +68,43 @@ function mainOf(f, list) {
   return best;
 }
 // --- where the game stands: the positions it went through, the opening reached, the ones still possible ---
+// A line is still possible while every move played so far, by each side, is one of that line's moves for that
+// side, in any order: 1.d4 d5 2.Bf4 e6 still becomes the London lines that play Nf3 before Bf4. The opening
+// reached is the longest line whose final position the game has passed through.
 function exploreState() {
   const g = game, moves = g && (g.pz.explore || g.pz.name === 'Openings') ? (g.moves || []) : [];
-  const sig = moves.map(m => m.from + '-' + m.to + (m.promo || '')).join(',');
+  const sig = moves.map(moveId).join(',');
   if (exCache && exCache.sig === sig) return exCache;
-  let st = CH.fromFEN(PUZZLES[0].fen, true); const keys = [keyOf(st)];
-  for (const m of moves) { st = CH.make(st, m); keys.push(keyOf(st)); }
-  const n = moves.length, possible = [];
+  let st = CH.fromFEN(PUZZLES[0].fen, true); const seen = new Set([keyOf(st)]);
+  for (const m of moves) { st = CH.make(st, m); seen.add(keyOf(st)); }
+  const played = [new Map(), new Map()];   // White's moves, Black's moves: how many times each
+  moves.forEach((m, p) => { const k = moveId(m), c = played[p % 2]; c.set(k, (c.get(k) || 0) + 1); });
+  const n = moves.length, possible = [], left = new Map(), track = new Set();
   let reached = -1;
   for (let i = 0; i < OPS.name.length; i++) {
-    const L = OPS.split[i].length, K = OPS.keys[i];
-    if (L > n && K[n] === keys[n]) possible.push(i);
-    if (L <= n && K[L] === keys[L] && (reached < 0 || L >= OPS.split[reached].length)) reached = i;
+    if (seen.has(OPS.finalKey[i]) && (reached < 0 || OPS.split[i].length >= OPS.split[reached].length)) reached = i;
+    if (OPS.split[i].length <= n) continue;
+    const use = [new Map(played[0]), new Map(played[1])], todo = [];
+    OPS.ids[i].forEach((k, p) => { const c = use[p % 2]; if (c.get(k)) c.set(k, c.get(k) - 1); else todo.push(p); });
+    if (todo.length && [...use[0].values(), ...use[1].values()].every(v => v === 0)) {
+      possible.push(i); left.set(i, todo);
+      if (todo[0] >= n) track.add(i);   // the line's own first moves are the ones played: the same move order
+    }
   }
-  return (exCache = { sig, n, keys, possible, reached });
+  return (exCache = { sig, n, possible, set: new Set(possible), left, track, reached });
 }
-const stillOn = (i, s) => i >= 0 && OPS.split[i].length > s.n && OPS.keys[i][s.n] === s.keys[s.n];
-// the move of the followed line from here, if it is that side's turn on the board
-function lineMove(i, s, st) { return stillOn(i, s) ? CH.findSan(st, OPS.split[i][s.n]) : null; }
+const stillOn = (i, s) => i >= 0 && s.set.has(i);
+// the next move of the followed line for the side to move: its first move not played yet that is legal now
+function lineMove(i, s, st) {
+  if (!stillOn(i, s)) return null;
+  const side = st.white ? 0 : 1, L = CH.legal(st);
+  for (const p of s.left.get(i)) {
+    if (p % 2 !== side) continue;
+    const m = L.find(x => moveId(x) === OPS.ids[i][p]);
+    if (m) return m;
+  }
+  return null;
+}
 function bookReply(g) {
   if (!$('exAlong').checked || !OPS) return null;
   return lineMove(exPick, exploreState(), g.st);
@@ -99,13 +121,14 @@ function exploreRefresh() {
   // the line you follow, and its next move for you
   $('exPick').hidden = exPick < 0;
   if (exPick >= 0) {
-    const yours = (s.n % 2 === 0) === (opSide === 'w'), m = lineMove(exPick, s, g ? g.st : CH.fromFEN(PUZZLES[0].fen, true));
+    const st = g ? g.st : CH.fromFEN(PUZZLES[0].fen, true), yours = (s.n % 2 === 0) === (opSide === 'w'), m = lineMove(exPick, s, st);
     $('exPickName').textContent = OPS.name[exPick];
-    $('exPickMoves').textContent = movesText(OPS.split[exPick], s.n);
+    const mine = s.left.get(exPick).filter(p => (p % 2 === 0) === (opSide === 'w')).map(p => OPS.split[exPick][p]);
+    $('exPickMoves').textContent = movesText(OPS.split[exPick]) + (mine.length ? `  ·  yours still to play: ${mine.join(', ')}` : '');
     const can = inGame && g.phase === 'user' && g.view === null && yours && m;
     $('exPlay').hidden = !inGame || !yours;
     $('exPlay').disabled = !can;
-    $('exPlay').textContent = m && yours ? `Play ${movesText(OPS.split[exPick].slice(0, s.n + 1), s.n)}` : 'Play';
+    $('exPlay').textContent = m && yours ? `Play ${(s.n >> 1) + 1}${s.n % 2 ? '...' : '.'}${CH.san(st, m)}` : 'Play';
   }
   renderList(s);
 }
@@ -115,21 +138,25 @@ function renderList(s) {
   const list = s.possible.filter(i => !words.length || words.every(w => (OPS.name[i] + ' ' + OPS.eco[i] + ' ' + OPS.moves[i]).toLowerCase().includes(w)));
   const fam = {};
   for (const i of list) (fam[OPS.family[i]] = fam[OPS.family[i]] || []).push(i);
-  const fams = Object.keys(fam).sort((a, b) => fam[b].length - fam[a].length || a.localeCompare(b));
-  $('exCount').textContent = `${fams.length} famil${fams.length === 1 ? 'y' : 'ies'}, ${list.length} line${list.length === 1 ? '' : 's'}`;
+  // first the families that go on in the move order played, then those reached by another order
+  const onTrack = f => fam[f].some(i => s.track.has(i));
+  const fams = Object.keys(fam).sort((a, b) => onTrack(b) - onTrack(a) || fam[b].length - fam[a].length || a.localeCompare(b));
+  const near = fams.filter(onTrack).length, far = fams.length - near;
+  $('exCount').textContent = `${near} famil${near === 1 ? 'y' : 'ies'}` + (far ? `, and ${far} by another move order` : '');
   const sig = s.sig + '|' + q + '|' + exPick + '|' + exFamily + '|' + $('opAdv').checked;
   if ($('opList').dataset.sig === sig) return;   // nothing changed: keep the scroll where it is
   $('opList').dataset.sig = sig;
   let html = '';
-  for (const f of fams) {
+  fams.forEach((f, k) => {
+    if (k === near && near < fams.length) html += '<p class="op-div">By another move order</p>';
     const L = fam[f], on = exPick >= 0 && OPS.family[exPick] === f, open = $('opAdv').checked && (exFamily === f || words.length);
-    const main = mainOf(f, L);
-    html += `<button class="op-row${on && !open ? ' on' : ''}" type="button" data-fam="${esc(f)}"><span class="n">${L.length}</span>${$('opAdv').checked ? `<span class="fam-open">${open ? '▾' : '▸'}</span> ` : ''}${esc(f)}<small>${movesText(OPS.split[main], s.n, 6)}</small></button>`;
+    const main = mainOf(f, L, s.track);
+    html += `<button class="op-row${on && !open ? ' on' : ''}" type="button" data-fam="${esc(f)}"><span class="n">${L.length}</span>${$('opAdv').checked ? `<span class="fam-open">${open ? '▾' : '▸'}</span> ` : ''}${esc(f)}<small>${movesText(OPS.split[main], 0, 8)}</small></button>`;
     if (open) html += L.slice().sort((a, b) => OPS.split[a].length - OPS.split[b].length || OPS.name[a].localeCompare(OPS.name[b])).slice(0, 80).map(i => {
       const short = OPS.name[i].startsWith(f + ':') ? OPS.name[i].slice(f.length + 1).trim() : OPS.name[i];
-      return `<button class="op-row sub${i === exPick ? ' on' : ''}" type="button" data-op="${i}"><span class="n">${OPS.eco[i]}</span>${esc(short)}<small>${movesText(OPS.split[i], s.n, 6)}</small></button>`;
+      return `<button class="op-row sub${i === exPick ? ' on' : ''}" type="button" data-op="${i}"><span class="n">${OPS.eco[i]}</span>${esc(short)}<small>${movesText(OPS.split[i], 0, 8)}</small></button>`;
     }).join('');
-  }
+  });
   $('opList').innerHTML = html || '<p class="op-empty">No named opening goes on from this position.</p>';
 }
 // --- choices ---
@@ -165,7 +192,7 @@ $('opList').addEventListener('click', e => {
   else {
     const f = b.dataset.fam;
     exFamily = $('opAdv').checked && exFamily === f ? null : f;
-    exPick = mainOf(f, s.possible.filter(i => OPS.family[i] === f));
+    exPick = mainOf(f, s.possible.filter(i => OPS.family[i] === f), s.track);
   }
   exploreRefresh();
 });

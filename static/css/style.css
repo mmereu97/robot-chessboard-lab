@@ -200,3 +200,4 @@ canvas.cheer-canvas { position: fixed; inset: 0; display: block; width: 100vw; h
 .op-follow { border-left-color: var(--good); }
 .op-row.sub { padding-left: 24px; font-size: 13px; }
 .op-row .fam-open { color: var(--accent); }
+.op-div { margin: 0; padding: 7px 10px; font: 600 11px var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--panel); border-bottom: 1px solid var(--line); }
