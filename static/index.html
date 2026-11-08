@@ -6,7 +6,7 @@
 <title>Robot Chessboard Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="css/style.css?v=20261108a">
+<link rel="stylesheet" href="css/style.css?v=20261108c">
 </head>
 <body>
 <div class="wrap">
@@ -59,7 +59,6 @@
         </div>
         <div class="row">
           <button class="btn" id="gNext" type="button" hidden>Next unsolved <span aria-hidden="true">▶</span></button>
-          <button class="btn" id="gOpPlay" type="button" hidden>Play on against Stockfish <span aria-hidden="true">▶</span></button>
           <button class="btn" id="gRestart" type="button">Restart position</button>
           <button class="btn" id="gUndo" type="button" hidden>Take back</button>
           <button class="btn" id="gResign" type="button" hidden>Resign</button>
@@ -132,19 +131,34 @@
       </div>
       </div>
       <div class="mode-pane" id="paneOpenings" hidden>
+      <div class="ex-setup">
+        <div>
+          <p class="lbl">I play</p>
+          <div class="seg" id="opSide" role="group" aria-label="Your color">
+            <button type="button" data-side="w" class="on">White</button><button type="button" data-side="b">Black</button>
+          </div>
+        </div>
+        <div>
+          <p class="lbl">Stockfish Elo</p>
+          <input type="number" id="opElo" min="100" max="3000" step="50" value="550" aria-label="Stockfish Elo">
+        </div>
+      </div>
+      <button class="go" id="opStart" type="button">New game</button>
+      <div class="op-pick" id="exNow"><span class="lbl">Now</span><b id="exNowName">Starting position</b><small id="exNowMoves">Press New game, then pick an opening below: its ghosts show where your pieces go.</small></div>
+      <div class="op-pick op-follow" id="exPick" hidden>
+        <span class="lbl">You follow</span><b id="exPickName"></b><small id="exPickMoves"></small>
+        <div class="row" style="margin-top:8px"><button class="btn" id="exPlay" type="button">Play</button><button class="btn" id="exDrop" type="button">Stop following</button></div>
+      </div>
       <div>
-        <p class="lbl">Openings <span id="opCount"></span></p>
-        <input type="search" class="op-search" id="opSearch" placeholder="Name, ECO or moves: Najdorf, B90, e4 c5" aria-label="Search the openings" autocomplete="off">
+        <p class="lbl">Openings still possible · <span id="exCount"></span></p>
+        <input type="search" class="op-search" id="opSearch" placeholder="Filter: Najdorf, B90, Ng5" aria-label="Filter the openings" autocomplete="off" hidden>
+        <div class="op-list" id="opList"></div>
       </div>
-      <div class="op-chips" id="opChips"></div>
-      <div class="op-list" id="opList"></div>
-      <div class="op-opts">
-        <label><span class="lbl">You play</span>
-          <select id="opColor"><option value="auto">Auto: by its name</option><option value="w">White</option><option value="b">Black</option></select></label>
-        <label><span class="lbl">Ghosts</span>
-          <select id="opGhosts"><option value="all">All your pieces</option><option value="next">Next move only</option><option value="off">None: from memory</option></select></label>
-      </div>
-      <p class="sub" style="margin:0;font-size:12.5px">The robot plays the other side's book moves; only the book move is taken from you. Auto plays a Defense with Black, the rest with White. With no ghosts, a wrong try shows the right move. Names and moves: lichess-org/chess-openings.</p>
+      <label class="op-adv"><input type="checkbox" id="opAdv"> Advanced: show every variation, and a filter</label>
+      <label class="op-adv"><input type="checkbox" id="exAlong" checked> Stockfish plays along with the opening you follow</label>
+      <label><span class="lbl">Ghosts</span>
+        <select id="opGhosts"><option value="all">All your pieces, at once</option><option value="next">Only your next move</option><option value="off">None</option></select></label>
+      <p class="sub" style="margin:0;font-size:12.5px">The list keeps only the openings your game can still turn into, and shrinks with every move, transpositions included. Names and moves: lichess-org/chess-openings (3,865 openings).</p>
       </div>
       <div>
         <p class="lbl">Planner</p>
@@ -209,13 +223,13 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=20261108a"></script>
-<script src="js/puzzles.js?v=20261108a"></script>
-<script src="js/twins.js?v=20261108a"></script>
+<script src="js/engine.js?v=20261108c"></script>
+<script src="js/puzzles.js?v=20261108c"></script>
+<script src="js/twins.js?v=20261108c"></script>
 <script>if (/^(localhost$|127\.)/.test(location.hostname)) document.write('<script src="js/puzzles-private.js"><\/script>');</script>
-<script src="js/chess.js?v=20261108a"></script>
-<script src="js/pieces.js?v=20261108a"></script>
-<script src="js/app.js?v=20261108a"></script>
-<script src="js/openings.js?v=20261108a"></script>
+<script src="js/chess.js?v=20261108c"></script>
+<script src="js/pieces.js?v=20261108c"></script>
+<script src="js/app.js?v=20261108c"></script>
+<script src="js/openings.js?v=20261108c"></script>
 </body>
 </html>

@@ -187,5 +187,16 @@ canvas.cheer-canvas { position: fixed; inset: 0; display: block; width: 100vw; h
 .op-row .ok { color: var(--good); font-weight: 600; }
 .op-back { font-weight: 600; color: var(--accent); }
 .op-empty { margin: 0; padding: 14px 10px; color: var(--muted); font-size: 13px; }
-.op-opts { display: grid; gap: 10px; }
-.op-opts label { display: grid; gap: 0; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--bg); border-radius: 9px; }
+.seg button { appearance: none; border: 0; background: none; cursor: pointer; font: 600 14px var(--f-body); color: var(--muted); padding: 8px 6px; border-radius: 6px; }
+.seg button.on { background: var(--ink); color: var(--panel); }
+.op-pick { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 10px 12px; background: var(--bg); }
+.op-pick b { display: block; font-size: 14px; }
+.op-pick small { display: block; margin-top: 4px; color: var(--muted); font: 12px/1.5 var(--f-mono); }
+.op-adv { font-size: 13px; color: var(--muted); cursor: pointer; }
+#opElo { width: 100%; box-sizing: border-box; }
+.ex-setup { display: grid; grid-template-columns: 1fr 110px; gap: 12px; align-items: end; }
+.op-pick .lbl { display: block; margin-bottom: 2px; }
+.op-follow { border-left-color: var(--good); }
+.op-row.sub { padding-left: 24px; font-size: 13px; }
+.op-row .fam-open { color: var(--accent); }

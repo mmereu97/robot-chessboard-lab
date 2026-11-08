@@ -109,7 +109,9 @@ No packages are needed, only Python 3.8+ (or nothing at all, see below).
 
 ## Openings
 
-The third tab holds the 3,865 named openings of [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) (CC0), from the first move to the move that gives each its name. Search by name, ECO code or moves (`Najdorf`, `B90`, `e4 c5 Nf3`), click one of the popular families, or browse all of them, largest first. You play one side and the robot plays the other side's book moves; Auto plays a Defense with Black and the rest with White. Ghosts on the board show where your pieces are going: faint, with a dotted outline, on the squares they reach at the end of the line, and stronger, ringed, for your next move. They can be cut down to the next move only, or switched off to play from memory. A move that is not the book's is refused and the robots leave the board as it was; with the ghosts off, a wrong try shows the right move. Hint works as in the puzzles. A learnt opening gets a ✓ in the list, kept in the browser, and from there you can play on against Stockfish at the Elo set under Play Stockfish. `tools/openings/build.js` takes the list out of chess-analysis-board, where it is a tree of moves, checks every line and writes `static/data/openings.json`.
+The third tab is a game against Stockfish that teaches openings as you play. Choose your colour and Stockfish's Elo and press New game. Beside the board, the list holds every opening of [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) (CC0, 3,865 named lines in 141 families) that your game can still turn into, and it shrinks with every move. Lines are matched by position, not by move order, so a transposition keeps them. Above the list, the opening the game has reached so far, with its ECO code.
+
+Click a family and you follow its main line: ghosts show where your pieces go, faint with a dotted outline on the squares they reach at the end of the line, and stronger, ringed, for your move now. Play that move yourself, or press Play. Stockfish plays along with the line you follow, unless that is switched off; then it answers with its own moves and the list tells you what is left. A move off the line drops it, and you can pick another one at any time. Advanced shows every variation under the chosen family, with a filter by name, ECO or moves. Before the game starts, a picked line already shows its ghosts. `tools/openings/build.js` takes the list out of chess-analysis-board, where it is a tree of moves, checks every line and writes `static/data/openings.json`.
 
 ## Files
 
@@ -123,7 +125,7 @@ The third tab holds the 3,865 named openings of [lichess-org/chess-openings](htt
 | `static/js/twins.js` | The hundred twin mates, written by `tools/twin-mates` |
 | `static/js/chess.js` | Chess rules: legal moves, check, mate-in-two solver, robot defence |
 | `static/js/app.js` | Drawing, animation, buttons, playing moves |
-| `static/js/openings.js` | The Openings tab: list, search, ghosts, the robot playing the book |
+| `static/js/openings.js` | The Openings tab: the openings still possible, the line you follow, its ghosts |
 | `static/data/openings.json` | The named openings: ECO code, name, moves |
 | `static/bot/` | The Stockfish bot: its brain and driver (`bot.js`), the engine, chess.js, the openings database |
 | `serve.py` | Local web server for PyCharm |
