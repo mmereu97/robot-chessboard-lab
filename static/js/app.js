@@ -672,14 +672,21 @@ function showPuzzleInfo(pz) {
 // =================== who stands better: a second Stockfish, at full strength, only for this bar ===================
 const EVAL_MS = 800, EVAL_MIN_DEPTH = 6;
 const evalState = { w: null, busy: false, want: null, fen: null, shown: null, cache: new Map() };
-const evalWanted = () => mode === 'play' && $('evalOn').checked;
+// in a game against Stockfish, under Play Stockfish or under Openings
+const evalWanted = () => $('evalOn').checked && (mode === 'play' || (mode === 'openings' && !!(game && game.bot)));
 function evalVisible() {
   const show = evalWanted();
   if ($('evalBar').hidden === show) { $('evalBar').hidden = !show; resize(); }
   if (show && game && game.bot) evalPosition(game);
 }
 try { const v = localStorage.getItem('robo-eval'); if (v !== null) $('evalOn').checked = v === '1'; } catch (e) {}
-$('evalOn').addEventListener('change', () => { try { localStorage.setItem('robo-eval', $('evalOn').checked ? '1' : '0'); } catch (e) {} evalVisible(); });
+$('evalOnOp').checked = $('evalOn').checked;
+// the same choice, ticked under Play Stockfish or under Openings
+['evalOn', 'evalOnOp'].forEach(id => $(id).addEventListener('change', () => {
+  $('evalOn').checked = $('evalOnOp').checked = $(id).checked;
+  try { localStorage.setItem('robo-eval', $(id).checked ? '1' : '0'); } catch (e) {}
+  evalVisible();
+}));
 function fenOf(st) {
   const rows = [];
   for (let r = 0; r < 8; r++) { let s = '', e = 0; for (let f = 0; f < 8; f++) { const p = st.b[r * 8 + f]; if (!p) e++; else { if (e) { s += e; e = 0; } s += p; } } rows.push(s + (e || '')); }
@@ -1149,7 +1156,7 @@ function refreshGame() {
   if (!game) return;
   const g = game, st = CH.status(g.st), side = g.st.white ? 'White' : 'Black';
   if (g.result === 'win') cheerWin(g);
-  evalPosition(g);
+  evalVisible();
   showMaterial(g);
   $('gNext').hidden = !(g.pz.mine && g.result === 'win');
   let text = '', cls = '';
