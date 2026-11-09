@@ -111,7 +111,9 @@ function bookReply(g) {
 }
 // --- the panel ---
 function exploreRefresh() {
+  if (mode === 'openings' && exKind === 'sys') { systemRefresh(); return; }
   if (!OPS || mode !== 'openings') return;
+  $('opStart').textContent = 'New game';
   const s = exploreState(), g = game, inGame = !!(g && g.pz.explore);
   if (exPick >= 0 && !stillOn(exPick, s)) { exPick = -1; }
   $('opSide').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.side === opSide));
@@ -166,24 +168,26 @@ function showOpenings() {
     .catch(e => { console.error(e); $('opList').innerHTML = '<p class="op-empty">The list of openings could not be loaded.</p>'; });
 }
 function openingFor(key) {
+  if (key === 'sysgame') return systemPuzzle();
   if (key === 'start') return { ...PUZZLES[0], player: opSide, name: 'Openings', desc: 'Choose your colour and Stockfish’s Elo, then press New game.' };
   const elo = opElo();
   return { name: 'Opening practice', desc: `You play ${opSide === 'w' ? 'White' : 'Black'} against Stockfish at Elo ${elo}. Pick an opening on the right to see its ghosts.`,
     fen: PUZZLES[0].fen, explore: true, bot: { elo, human: opSide } };
 }
 $('opStart').addEventListener('click', () => {
-  if (!OPS) return;
-  if (game && game.pz.explore && game.history.length && game.phase !== 'done' && !confirm('Leave this game for a new one?')) return;
+  if (!OPS && exKind !== 'sys') return;
+  if (game && (game.pz.explore || game.pz.system) && game.history.length && game.phase !== 'done' && !confirm('Leave this game for a new one?')) return;
   $('botElo').value = opElo(); saveElo(opElo()); exCache = null;
-  request('opgame');
+  request(exKind === 'sys' ? 'sysgame' : 'opgame');
 });
 $('opSide').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || b.dataset.side === opSide) return;
   // your colour always at the bottom: before a game the board turns, during one a new game starts with that colour
-  const g = game, playing = g && g.pz.explore && g.phase !== 'done';
+  const g = game, playing = g && (g.pz.explore || g.pz.system) && g.phase !== 'done';
   if (playing && g.history.length > 2 && !confirm(`Start a new game as ${b.dataset.side === 'w' ? 'White' : 'Black'}?`)) return;
   opSide = b.dataset.side; store('robo-opside', opSide);
-  if (playing) { $('botElo').value = opElo(); saveElo(opElo()); exCache = null; request('opgame'); } else request('start');
+  if (exKind === 'sys') systemSideChanged();   // a system of that colour
+  if (playing) { $('botElo').value = opElo(); saveElo(opElo()); exCache = null; request(exKind === 'sys' ? 'sysgame' : 'opgame'); } else request('start');
 });
 $('opList').addEventListener('click', e => {
   const b = e.target.closest('.op-row'); if (!b) return;
@@ -209,6 +213,7 @@ $('opGhosts').addEventListener('change', () => store('robo-opghosts', $('opGhost
 $('opElo').addEventListener('change', () => { $('opElo').value = opElo(); store('robo-opelo', $('opElo').value); });
 // faint ghosts where your pieces are going on the followed line, a stronger one with a ring for your next move
 function drawGhosts(g) {
+  if (exKind === 'sys') { drawSystemGhosts(g); return; }
   if (!OPS || mode !== 'openings' || exPick < 0 || g.view !== null || g.result || !(g.pz.explore || g.pz.name === 'Openings')) return;
   const s = exploreState(); if (!stillOn(exPick, s)) return;
   const how = $('opGhosts').value, b = g.st.b, white = opSide === 'w', final = OPS.final[exPick];

@@ -115,6 +115,10 @@ The third tab is a game against Stockfish that teaches openings as you play. Cho
 
 Click a family and you follow its main line: ghosts show where your pieces go, faint with a dotted outline on the squares they reach at the end of the line, and stronger, ringed, for your move now. Play that move yourself, or press Play. Stockfish plays along with the line you follow, unless that is switched off; then it answers with its own moves and the list tells you what is left. A move off the line drops it, and you can pick another one at any time. Advanced shows every variation under the chosen family, with a filter by name, ECO or moves. Before the game starts, a picked line already shows its ghosts. `tools/openings/build.js` takes the list out of chess-analysis-board, where it is a tree of moves, checks every line and writes `static/data/openings.json`.
 
+### Systems
+
+A named opening depends on both players' moves; a system is a setup of your own pieces that you build almost whatever the other side does. Under Openings, Systems offers eleven: for White the London, Colle-Zukertort, Colle-Koltanowski, Torre, Jobava London, Stonewall Attack and King's Indian Attack; for Black the King's Indian / Pirc setup, Caro-Kann / Slav, Hippopotamus and Stonewall Dutch. Choose one and Stockfish's Elo, and play: Stockfish plays as it likes. Ghosts show the squares of the setup still to fill, in any order. On each of your turns Stockfish at full strength looks twice, at the best move of all and at the best of the setup moves (`searchmoves`). If the setup move costs under 0.7 of a pawn, a green arrow shows it; if not, an orange arrow shows what to play first and how much the setup move would lose. Notes explain the usual deviations, such as an early ...Bf5 against the Colle or ...Qb6 against the London. A piece traded off leaves the setup, a bishop by the colour of its squares. Once the setup stands, the arrows follow the system's plan, such as Ne5 and f4 in the Colle-Zukertort.
+
 ## Files
 
 | File | What it does |
@@ -128,6 +132,7 @@ Click a family and you follow its main line: ghosts show where your pieces go, f
 | `static/js/chess.js` | Chess rules: legal moves, check, mate-in-two solver, robot defence |
 | `static/js/app.js` | Drawing, animation, buttons, playing moves |
 | `static/js/openings.js` | The Openings tab: the openings still possible, the line you follow, its ghosts |
+| `static/js/systems.js` | Systems: the eleven setups, their ghosts, the advice checked by Stockfish, the notes |
 | `static/data/openings.json` | The named openings: ECO code, name, moves |
 | `static/bot/` | The Stockfish bot: its brain and driver (`bot.js`), the engine, chess.js, the openings database |
 | `serve.py` | Local web server for PyCharm |

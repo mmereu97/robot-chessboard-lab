@@ -143,7 +143,7 @@ $('speed').addEventListener('input', () => { $('speedVal').textContent = speed()
 
 function puzzleFor(key) {
   if (key === 'bot') return botPuzzle();
-  if (key === 'opgame' || key === 'start') return openingFor(key);
+  if (key === 'opgame' || key === 'start' || key === 'sysgame') return openingFor(key);
   if (key === 'rand') return { name: 'Random position', desc: 'Pieces scattered at random, as a stress test.', fen: randomFEN() };
   return PUZZLES[+key.slice(1)];
 }
@@ -912,7 +912,7 @@ function bookLost(g, text) { g.result = 'lose'; g.loseMsg = text; g.phase = 'don
 // the position, and the exercise fails only when the win (or the draw) is gone.
 const WIN_KEEP = 1.5, WIN_DONE = 8, DRAW_LOST = -2, DRAW_MOVES = 12;
 let judgeW = null, judgeChain = Promise.resolve();
-function judge(fen, ms = 700) {   // { cp } or { mate } for the side to move, and its best move
+function judge(fen, ms = 700, only = null) {   // only: UCI moves to choose among (searchmoves)   // { cp } or { mate } for the side to move, and its best move
   const run = () => new Promise(res => {
     if (!judgeW) {
       const wasm = new URL('bot/stockfish.wasm', location.href).href;
@@ -929,7 +929,7 @@ function judge(fen, ms = 700) {   // { cp } or { mate } for the side to move, an
       }
     };
     judgeW.postMessage('position fen ' + fen);
-    judgeW.postMessage('go movetime ' + ms);
+    judgeW.postMessage('go movetime ' + ms + (only && only.length ? ' searchmoves ' + only.join(' ') : ''));
   });
   return (judgeChain = judgeChain.then(run, run));
 }
@@ -1705,7 +1705,7 @@ function drawBestArrow() {
   };
   ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.globalAlpha = 0.5; ctx.strokeStyle = ctx.fillStyle = 'rgba(255,255,255,.9)'; shape(0.07);
-  ctx.globalAlpha = 0.9; ctx.strokeStyle = ctx.fillStyle = tok['--arrow'] || '#17796b'; shape(0);
+  ctx.globalAlpha = 0.9; ctx.strokeStyle = ctx.fillStyle = g.best.warn ? tok['--accent'] : tok['--arrow'] || '#17796b'; shape(0);
   ctx.restore();
 }
 function drawGameDots() {

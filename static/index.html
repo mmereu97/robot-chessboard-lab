@@ -6,7 +6,7 @@
 <title>Robot Chessboard Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="css/style.css?v=20261108h">
+<link rel="stylesheet" href="css/style.css?v=20261109a">
 </head>
 <body>
 <div class="wrap">
@@ -132,6 +132,9 @@
       </div>
       </div>
       <div class="mode-pane" id="paneOpenings" hidden>
+      <div class="seg" id="exKind" role="group" aria-label="What to practise">
+        <button type="button" data-kind="named" class="on">Named openings</button><button type="button" data-kind="sys">Systems</button>
+      </div>
       <div class="ex-setup">
         <div>
           <p class="lbl">I play</p>
@@ -145,6 +148,15 @@
         </div>
       </div>
       <button class="go" id="opStart" type="button">New game</button>
+      <div class="mode-pane" id="exSys" hidden>
+        <div class="op-pick op-follow" id="sysInfo"><span class="lbl" id="sysInfoLbl">System</span><b id="sysName"></b><small id="sysSetup"></small><p class="sys-text" id="sysIdea"></p><p class="sys-text" id="sysPlan"></p></div>
+        <div class="op-pick" id="sysNow" hidden><span class="lbl">Now</span><b id="sysProgress"></b><small id="sysNote"></small></div>
+        <div>
+          <p class="lbl">Systems</p>
+          <div class="op-list sys-list" id="sysList"></div>
+        </div>
+      </div>
+      <div class="mode-pane" id="exNamed">
       <div class="op-pick" id="exNow"><span class="lbl">Now</span><b id="exNowName">Starting position</b><small id="exNowMoves">Press New game, then pick an opening below: its ghosts show where your pieces go.</small></div>
       <div class="op-pick op-follow" id="exPick" hidden>
         <span class="lbl">You follow</span><b id="exPickName"></b><small id="exPickMoves"></small>
@@ -157,6 +169,7 @@
       </div>
       <label class="op-adv"><input type="checkbox" id="opAdv"> Advanced: show every variation, and a filter</label>
       <label class="op-adv"><input type="checkbox" id="exAlong" checked> Stockfish plays along with the opening you follow</label>
+      </div>
       <label class="op-adv"><input type="checkbox" id="evalOnOp" checked> Show who stands better, beside the board</label>
       <label><span class="lbl">Ghosts</span>
         <select id="opGhosts"><option value="all">All your pieces, at once</option><option value="next">Only your next move</option><option value="off">None</option></select></label>
@@ -225,13 +238,14 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=20261108h"></script>
-<script src="js/puzzles.js?v=20261108h"></script>
-<script src="js/twins.js?v=20261108h"></script>
+<script src="js/engine.js?v=20261109a"></script>
+<script src="js/puzzles.js?v=20261109a"></script>
+<script src="js/twins.js?v=20261109a"></script>
 <script>if (/^(localhost$|127\.)/.test(location.hostname)) document.write('<script src="js/puzzles-private.js"><\/script>');</script>
-<script src="js/chess.js?v=20261108h"></script>
-<script src="js/pieces.js?v=20261108h"></script>
-<script src="js/app.js?v=20261108h"></script>
-<script src="js/openings.js?v=20261108h"></script>
+<script src="js/chess.js?v=20261109a"></script>
+<script src="js/pieces.js?v=20261109a"></script>
+<script src="js/app.js?v=20261109a"></script>
+<script src="js/openings.js?v=20261109a"></script>
+<script src="js/systems.js?v=20261109a"></script>
 </body>
 </html>
