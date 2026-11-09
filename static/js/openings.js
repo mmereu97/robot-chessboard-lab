@@ -40,13 +40,10 @@ function loadOpenings() {
   if (OPS) return Promise.resolve(OPS);
   return fetch('data/openings.json').then(r => r.json()).then(d => {
     OPS = d; OPS.family = d.name.map(familyOf); OPS.split = d.moves.map(m => m.split(' '));
-    // each line as moves (from-to) and as its final position, to recognise it whatever the move order
-    OPS.ids = []; OPS.final = []; OPS.finalKey = [];
-    for (const line of OPS.split) {
-      let st = CH.fromFEN(PUZZLES[0].fen, true); const ids = [];
-      for (const san of line) { const m = CH.findSan(st, san); ids.push(moveId(m)); st = CH.make(st, m); }
-      OPS.ids.push(ids); OPS.final.push(st.b); OPS.finalKey.push(keyOf(st));
-    }
+    // each line as moves (from-to) and as its final position, to recognise it whatever the move order;
+    // tools/openings/build.js works them out, so loading is only reading
+    OPS.finalKey = d.final; OPS.ids = d.ids.map(x => x.split(' '));
+    OPS.final = d.final.map(k => [...k.slice(0, 64)].map(c => c === '.' ? null : c));
     OPS.byMoves = new Map(d.moves.map((m, i) => [m, i]));
     return d;
   });
