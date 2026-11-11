@@ -688,7 +688,7 @@ const evalWanted = () => $('evalOn').checked && (mode === 'play' || (mode === 'o
 function evalVisible() {
   const show = evalWanted();
   if ($('evalBar').hidden === show) { $('evalBar').hidden = !show; resize(); }
-  if (show && game && game.bot) evalPosition(game);
+  if (show && game && (game.bot || game.review)) evalPosition(game);
 }
 try { const v = localStorage.getItem('robo-eval'); if (v !== null) $('evalOn').checked = v === '1'; } catch (e) {}
 $('evalOnOp').checked = $('evalOn').checked;
@@ -748,6 +748,11 @@ function evalSearch(fen) {
 }
 function evalPosition(g) {
   if (!(g.bot || g.review) || !evalWanted()) return;
+  if (g.review) {   // a reviewed game: the score Stockfish already gave the position on show
+    const a = g.review.an[viewedPly(g)];
+    $('evalBar').classList.toggle('flip', flip);
+    if (a) { evalPaint(a.mate !== undefined ? { mate: a.mate } : { cp: a.cp }); return; }
+  }
   const es = evalState, st = g.view !== null && g.frames[g.view] ? g.frames[g.view].st : g.st, fen = fenOf(st);
   $('evalBar').classList.toggle('flip', flip);
   if (es.shown === fen) { if (es.cache.has(fen)) evalPaint(es.cache.get(fen)); return; }   // until the engine has a word, the bar stays as it was

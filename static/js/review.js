@@ -65,9 +65,13 @@ function analyse(g, i) {
   if (i >= r.sts.length) { r.done = true; markAll(g); refreshGame(); return; }
   const st = r.sts[i], over = CH.status(st);
   const store = sc => { r.an[i] = sc; r.analysed = i + 1; if (i % 4 === 3 || i === r.sts.length - 1) { markAll(g); refreshGame(); } analyse(g, i + 1); };
-  if (over === 'mate') { store({ cp: st.white ? -100000 : 100000, best: null }); return; }
+  if (over === 'mate') { store({ cp: st.white ? -100000 : 100000, mate: st.white ? -0 : 0, best: null }); return; }
   if (over === 'stalemate') { store({ cp: 0, best: null }); return; }
-  judge(fenOf(st), 450).then(sc => store({ cp: (st.white ? 1 : -1) * (sc.mate !== undefined ? (sc.mate > 0 ? 100000 : -100000) : sc.cp), best: sc.best }));
+  // scores for White: the engine gives them for the side to move
+  const side = st.white ? 1 : -1;
+  judge(fenOf(st), 450).then(sc => store(sc.mate !== undefined
+    ? { cp: side * (sc.mate > 0 ? 100000 : -100000), mate: side * sc.mate, best: sc.best }
+    : { cp: side * sc.cp, best: sc.best }));
 }
 // the mark of each move whose positions are both read: the winning chances it cost the side that played it
 function markAll(g) {
