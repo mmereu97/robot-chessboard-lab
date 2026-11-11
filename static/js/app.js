@@ -144,6 +144,7 @@ $('speed').addEventListener('input', () => { $('speedVal').textContent = speed()
 function puzzleFor(key) {
   if (key === 'bot') return botPuzzle();
   if (key === 'opgame' || key === 'start' || key === 'sysgame') return openingFor(key);
+  if (key === 'review') return reviewPz;
   if (key === 'rand') return { name: 'Random position', desc: 'Pieces scattered at random, as a stress test.', fen: randomFEN() };
   return PUZZLES[+key.slice(1)];
 }
@@ -181,7 +182,7 @@ function launch(key, pz, fromStarts) {
   }
   flip = !!(pz.bot && pz.bot.human === 'b') || (pz.player || pz.side) === 'b';
   currentKey = key; sel.value = key;
-  $('pzName').textContent = pz.name; showPuzzleInfo(pz); $('pzDesc').textContent = pz.desc + (pz.bot || pz.mine || pz.set === 'twin' || key === 'start' ? '' : ` Opened by: ${lastInput}.`);
+  $('pzName').textContent = pz.name; showPuzzleInfo(pz); $('pzDesc').textContent = pz.desc + (pz.bot || pz.mine || pz.review || pz.set === 'twin' || key === 'start' ? '' : ` Opened by: ${lastInput}.`);
   $('clock').textContent = algo === 'fast' ? 'optimizing paths…' : 'planning paths…'; $('note').textContent = '';
   if (fromStarts) { cells = fromStarts.slice(); loose.fill(null); }
   const go = () => {
@@ -373,7 +374,14 @@ $('replayBtn').addEventListener('click', () => { if (!last || anim) return; carP
 document.addEventListener('keydown', e => {
   const tag = document.activeElement.tagName;
   if (/INPUT|SELECT|TEXTAREA/.test(tag)) return;
-  if (mode === 'play' && !(game && game.bot)) return;
+  if (mode === 'play' && !(game && (game.bot || game.review))) return;
+  if (game && game.review) {   // the arrows walk through the game; at its end → asks the robots for the next move
+    const to = { ArrowLeft: viewedPly(game) - 1, ArrowUp: 0, Home: 0, ArrowDown: game.history.length, End: game.history.length }[e.code];
+    if (e.code === 'ArrowRight') { e.preventDefault(); if (game.view === null) reviewStep(game); else viewPly(game, game.view + 1); }
+    else if (to !== undefined) { e.preventDefault(); viewPly(game, to); }
+    else if (e.code === 'Space') { e.preventDefault(); $('gReviewPlay').click(); }
+    return;
+  }
   if (mineOnly && (e.code === 'Space' || e.code === 'KeyR')) return;
   if (mode === 'openings' && !(game && game.bot) && e.code !== 'KeyP') return;
   if (game && game.bot) {   // a stray key must not end a game against Stockfish; the arrows look through its moves
@@ -627,8 +635,10 @@ function startGame(pz) {
   $('gRestart').textContent = pz.bot ? 'New game' : 'Restart position';
   // with a puzzle the three buttons sit between Previous and Next; in a game New game stays by Take back
   if (pz.bot) $('gUndo').before($('gRestart')); else $('gHint').before($('gRestart'));
-  $('gNav').hidden = !pz.bot;
+  $('gNav').hidden = !(pz.bot || pz.review);
+  $('gReviewPlay').hidden = !pz.review;
   if (pz.bot) startBotGame(pz.bot);
+  if (pz.review) startReview(game);
   refreshGame();
 }
 // the position a game starts from: a FEN, or the exact position an opening led to (castling, en passant)
@@ -674,7 +684,7 @@ function showPuzzleInfo(pz) {
 const EVAL_MS = 800, EVAL_MIN_DEPTH = 6;
 const evalState = { w: null, busy: false, want: null, fen: null, shown: null, cache: new Map() };
 // in a game against Stockfish, under Play Stockfish or under Openings
-const evalWanted = () => $('evalOn').checked && (mode === 'play' || (mode === 'openings' && !!(game && game.bot)));
+const evalWanted = () => $('evalOn').checked && (mode === 'play' || (mode === 'openings' && !!(game && game.bot)));   // a review is under Play
 function evalVisible() {
   const show = evalWanted();
   if ($('evalBar').hidden === show) { $('evalBar').hidden = !show; resize(); }
@@ -737,7 +747,7 @@ function evalSearch(fen) {
   w.postMessage('go movetime ' + EVAL_MS);
 }
 function evalPosition(g) {
-  if (!g.bot || !evalWanted()) return;
+  if (!(g.bot || g.review) || !evalWanted()) return;
   const es = evalState, st = g.view !== null && g.frames[g.view] ? g.frames[g.view].st : g.st, fen = fenOf(st);
   $('evalBar').classList.toggle('flip', flip);
   if (es.shown === fen) { if (es.cache.has(fen)) evalPaint(es.cache.get(fen)); return; }   // until the engine has a word, the bar stays as it was
@@ -1168,7 +1178,7 @@ function glideOver(P, review) {
 }
 $('gFirst').addEventListener('click', () => { if (game) viewPly(game, 0); });
 $('gBack').addEventListener('click', () => { if (game) viewPly(game, viewedPly(game) - 1); });
-$('gForward').addEventListener('click', () => { if (game) viewPly(game, viewedPly(game) + 1); });
+$('gForward').addEventListener('click', () => { if (!game) return; if (game.review && game.view === null) reviewStep(game); else viewPly(game, viewedPly(game) + 1); });
 $('gLive').addEventListener('click', () => { if (game) viewPly(game, game.history.length); });
 $('gMoves').addEventListener('click', e => { const t = e.target.closest('.mv'); if (t && game) viewPly(game, +t.dataset.ply); });
 const moveLabel = (g, ply) => `${(ply + 1) >> 1}${ply % 2 ? '.' : '…'} ${g.history[ply - 1]}`;
@@ -1195,12 +1205,13 @@ function refreshGame() {
   else if (g.phase === 'moving') text = 'Moving…';
   else text = (g.m2 || g.bot || bookGoal(g.pz) ? 'Your move' : side + ' to move') + (st === 'check' ? ' · check' : '');
   if (g.note && performance.now() < g.note.until && !g.result) text = g.note.text;
+  if (g.review && g.phase !== 'moving') text = reviewStatus(g);
   if (g.bestNote && g.bestNote.ply === g.history.length && g.phase === 'user' && g.view === null && !g.result) text = g.bestNote.text;   // stays until you move
   $('gStatus').textContent = text; $('gStatus').className = 'game-status ' + cls;
   if (mode === 'openings') exploreRefresh();
   cv.classList.toggle('holding', !!(g.held && g.held.queued === null));
   $('gPromo').hidden = !g.asking;
-  const move = (h, i) => g.bot ? `<span class="mv${i + 1 === viewedPly(g) ? ' on' : ''}" data-ply="${i + 1}">${h}</span>` : h;
+  const move = (h, i) => g.bot || g.review ? `<span class="mv${i + 1 === viewedPly(g) ? ' on' : ''}" data-ply="${i + 1}">${h}${g.review ? reviewBadge(g, i) : ''}</span>` : h;
   const late = g.pz.side === 'b' ? 1 : 0;   // Black moved first: the first move is 1...
   $('gMoves').innerHTML = (late && g.history.length ? '<b>1...</b> ' : '') + g.history.map((h, i) => ((i + late) % 2 === 0 ? `<b>${((i + late) >> 1) + 1}.</b> ` : '') + move(h, i)).join(' ') || '&nbsp;';
   if (g.bot) {
@@ -1214,6 +1225,14 @@ function refreshGame() {
     $('gResign').textContent = g.confirmResign ? 'Really resign?' : 'Resign';
     $('gResign').classList.toggle('confirm', !!g.confirmResign);
   } else $('gResign').hidden = $('gUndo').hidden = $('gBest').hidden = true;
+  if (g.review) {
+    const v = viewedPly(g);
+    $('gFirst').disabled = $('gBack').disabled = v === 0;
+    $('gForward').disabled = g.view === null && g.history.length >= g.review.moves.length;
+    $('gLive').disabled = g.view === null;
+    $('gReviewPlay').textContent = g.review.auto ? 'Pause' : g.history.length >= g.review.moves.length ? 'Played to the end' : 'Play';
+    $('gReviewPlay').disabled = !g.review.auto && g.history.length >= g.review.moves.length;
+  }
 }
 function boardAgents() { const map = new Map(); cells.forEach((c, a) => map.set(c, a)); return map; }
 const isTrayCell = c => cx(c) < TRAY_W || cx(c) >= W - TRAY_W;
@@ -1436,6 +1455,7 @@ function afterMove() {
   }
   if (g.trayQueue) { const q = g.trayQueue; g.trayQueue = null; layOnTray(q.a, q.pt, afterMove); return; }
   const st = CH.status(g.st);
+  if (g.review) { reviewAfterMove(g); return; }
   if (g.bot) { g.frames[g.history.length] = snapshot(g); botNext(g); return; }
   if (bookGoal(g.pz)) { bookNext(g); return; }
   if (!g.m2) { g.phase = 'user'; refreshGame(); return; }
@@ -1635,7 +1655,7 @@ cv.addEventListener('click', e => {
   }
   g.sel = (p && (p === p.toUpperCase()) === g.st.white && legalFrom(sq).length) ? sq : -1;
 });
-$('gRestart').addEventListener('click', () => { if (game && !anim) request(currentKey); });
+$('gRestart').addEventListener('click', () => { if (game && game.review) { viewPly(game, 0); return; } if (game && !anim) request(currentKey); });
 // Hint, in two steps: first the piece that moves, then also the square it goes to. Any turn, not only the first.
 function hintMove(g) {
   const pz = g.pz, i = g.history.length;
@@ -1694,7 +1714,8 @@ function drawGameMarks() {
 }
 // the best move as an arrow over the pieces, as in chess-analysis-board; it goes once a move is played
 function drawBestArrow() {
-  const g = game; if (!g || !g.best || g.best.ply !== g.history.length || g.view !== null || anim) return;
+  const g = game; if (!g || !g.best || anim) return;
+  if (g.review ? g.best.ply !== viewedPly(g) : (g.best.ply !== g.history.length || g.view !== null)) return;
   const x1 = sqX(g.best.from), y1 = sqY(g.best.from), x2 = sqX(g.best.to), y2 = sqY(g.best.to);
   const L = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / L, uy = (y2 - y1) / L, head = 0.42, w = 0.17;
   const sx = x1 + ux * 0.18, sy = y1 + uy * 0.18, tx = x2 - ux * 0.1, ty = y2 - uy * 0.1, bx = tx - ux * head, by = ty - uy * head;

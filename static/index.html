@@ -6,7 +6,7 @@
 <title>Robot Chessboard Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="css/style.css?v=20261109b">
+<link rel="stylesheet" href="css/style.css?v=20261112a">
 </head>
 <body>
 <div class="wrap">
@@ -62,6 +62,7 @@
           <button class="btn" id="gRestart" type="button">Restart position</button>
           <button class="btn" id="gUndo" type="button" hidden>Take back</button>
           <button class="btn" id="gBest" type="button" hidden>Best move</button>
+          <button class="btn" id="gReviewPlay" type="button" hidden>Play</button>
           <button class="btn" id="gResign" type="button" hidden>Resign</button>
         </div>
       </div>
@@ -129,6 +130,17 @@
         <p class="sub" style="margin:8px 0 0;font-size:12.5px">Below Elo 1320 it plays and errs like a person. Below 500 some of its moves are pure chance: for a child's first games.</p>
         <label style="display:block;margin-top:8px;font-size:13px"><input type="checkbox" id="botFight"> A rook or more down, it stops making mistakes</label>
         <label style="display:block;margin-top:6px;font-size:13px"><input type="checkbox" id="evalOn" checked> Show who stands better, beside the board</label>
+      </div>
+      <div class="review-box">
+        <p class="lbl">Review a game</p>
+        <textarea id="pgnText" rows="4" placeholder="Paste a game (PGN) from Lichess or chess.com" aria-label="PGN of the game"></textarea>
+        <input type="file" id="pgnFile" accept=".pgn,.txt,text/plain" aria-label="Or open a .pgn file">
+        <div class="row">
+          <input type="text" id="reviewName" placeholder="Your name there" aria-label="Your name on Lichess or chess.com" autocomplete="off">
+          <select id="reviewMe" aria-label="Your colour in the game"><option value="auto">Colour: by name</option><option value="w">I was White</option><option value="b">I was Black</option></select>
+        </div>
+        <button class="btn" id="reviewBtn" type="button" style="width:100%">Review with the robots</button>
+        <p class="sub" id="reviewMsg" style="margin:0;font-size:12.5px">The robots replay it; Stockfish marks every move and stops before each mistake with the better move as an arrow.</p>
       </div>
       </div>
       <div class="mode-pane" id="paneOpenings" hidden>
@@ -238,14 +250,15 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=20261109b"></script>
-<script src="js/puzzles.js?v=20261109b"></script>
-<script src="js/twins.js?v=20261109b"></script>
+<script src="js/engine.js?v=20261112a"></script>
+<script src="js/puzzles.js?v=20261112a"></script>
+<script src="js/twins.js?v=20261112a"></script>
 <script>if (/^(localhost$|127\.)/.test(location.hostname)) document.write('<script src="js/puzzles-private.js"><\/script>');</script>
-<script src="js/chess.js?v=20261109b"></script>
-<script src="js/pieces.js?v=20261109b"></script>
-<script src="js/app.js?v=20261109b"></script>
-<script src="js/openings.js?v=20261109b"></script>
-<script src="js/systems.js?v=20261109b"></script>
+<script src="js/chess.js?v=20261112a"></script>
+<script src="js/pieces.js?v=20261112a"></script>
+<script src="js/app.js?v=20261112a"></script>
+<script src="js/openings.js?v=20261112a"></script>
+<script src="js/systems.js?v=20261112a"></script>
+<script src="js/review.js?v=20261112a"></script>
 </body>
 </html>
