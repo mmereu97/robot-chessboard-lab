@@ -6,7 +6,7 @@
 <title>Robot Chessboard Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="css/style.css?v=20261112b">
+<link rel="stylesheet" href="css/style.css?v=20261112d">
 </head>
 <body>
 <div class="wrap">
@@ -27,6 +27,13 @@
       <div class="board-row">
         <div class="eval" id="evalBar" role="img" aria-label="Who stands better" hidden><i id="evalWhite"></i><span id="evalLabel"></span></div>
         <canvas id="cv" width="1270" height="860" aria-label="Chessboard with side trays for pieces not in play"></canvas>
+      </div>
+      <div class="row game-nav near" id="gNav" hidden>
+        <button class="btn" id="gFirst" type="button" title="First position (↑ or Home)" aria-label="First position">|◀</button>
+        <button class="btn" id="gBack" type="button" title="Move back (←)" aria-label="Move back">◀</button>
+        <button class="btn" id="gForward" type="button" title="Move forward (→)" aria-label="Move forward">▶</button>
+        <button class="btn" id="gLive" type="button" title="Back to the current move (↓ or End)" aria-label="Back to the current move">▶|</button>
+        <button class="btn play" id="gReviewPlay" type="button" hidden>Play</button>
       </div>
       <div class="material" id="material" hidden>
         <div class="mat-side" id="matYou"></div>
@@ -51,18 +58,11 @@
           <button class="btn" type="button" data-promo="B">Bishop</button>
           <button class="btn" type="button" data-promo="N">Knight</button>
         </div>
-        <div class="row game-nav" id="gNav" hidden>
-          <button class="btn" id="gFirst" type="button" title="First position (↑ or Home)" aria-label="First position">|◀</button>
-          <button class="btn" id="gBack" type="button" title="Move back (←)" aria-label="Move back">◀</button>
-          <button class="btn" id="gForward" type="button" title="Move forward (→)" aria-label="Move forward">▶</button>
-          <button class="btn" id="gLive" type="button" title="Back to the current move (↓ or End)" aria-label="Back to the current move">▶|</button>
-        </div>
         <div class="row">
           <button class="btn" id="gNext" type="button" hidden>Next unsolved <span aria-hidden="true">▶</span></button>
           <button class="btn" id="gRestart" type="button">Restart position</button>
           <button class="btn" id="gUndo" type="button" hidden>Take back</button>
           <button class="btn" id="gBest" type="button" hidden>Best move</button>
-          <button class="btn" id="gReviewPlay" type="button" hidden>Play</button>
           <button class="btn" id="gResign" type="button" hidden>Resign</button>
         </div>
       </div>
@@ -250,15 +250,15 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=20261112b"></script>
-<script src="js/puzzles.js?v=20261112b"></script>
-<script src="js/twins.js?v=20261112b"></script>
+<script src="js/engine.js?v=20261112d"></script>
+<script src="js/puzzles.js?v=20261112d"></script>
+<script src="js/twins.js?v=20261112d"></script>
 <script>if (/^(localhost$|127\.)/.test(location.hostname)) document.write('<script src="js/puzzles-private.js"><\/script>');</script>
-<script src="js/chess.js?v=20261112b"></script>
-<script src="js/pieces.js?v=20261112b"></script>
-<script src="js/app.js?v=20261112b"></script>
-<script src="js/openings.js?v=20261112b"></script>
-<script src="js/systems.js?v=20261112b"></script>
-<script src="js/review.js?v=20261112b"></script>
+<script src="js/chess.js?v=20261112d"></script>
+<script src="js/pieces.js?v=20261112d"></script>
+<script src="js/app.js?v=20261112d"></script>
+<script src="js/openings.js?v=20261112d"></script>
+<script src="js/systems.js?v=20261112d"></script>
+<script src="js/review.js?v=20261112d"></script>
 </body>
 </html>

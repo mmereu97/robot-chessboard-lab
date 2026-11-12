@@ -98,14 +98,17 @@ function reviewStatus(g) {
     const count = side => { const c = { '?!': 0, '?': 0, '??': 0 }; r.marks.forEach((m, i) => { if (m && mine(i) === side) c[m.sym]++; }); return `${c['??']} blunders, ${c['?']} mistakes, ${c['?!']} inaccuracies`; };
     return `End of the game${r.result ? ' (' + r.result + ')' : ''}. You: ${count(true)}. Your opponent: ${count(false)}. Click a marked move to see it again.`;
   }
-  const next = r.moves[p], m = r.marks[p], who = mine(p) ? 'Here you' : 'Here your opponent';
+  const next = r.moves[p], m = r.marks[p], yours = mine(p), who = yours ? 'Here you' : 'Here your opponent';
+  // an arrow only on your turn: the move you should play here (the opponent's best moves stay in words)
+  const bestMv = r.an[p] && CH.legal(r.sts[p]).find(x => uciOf(x) === r.an[p].best);
+  if (yours && bestMv) g.best = { from: bestMv.from, to: bestMv.to, ply: p };
   if (m) {
-    const better = sanOfUci(r.sts[p], r.an[p].best), mv = CH.legal(r.sts[p]).find(x => uciOf(x) === r.an[p].best);
-    if (mv) g.best = { from: mv.from, to: mv.to, ply: p };
-    return `${who} played ${reviewNum(p)} ${next}${m.sym}, ${m.name}: it cost ${Math.round(m.loss)}% of the winning chances. Better was ${reviewNum(p)} ${better} (the arrow).${progress}`;
+    const better = sanOfUci(r.sts[p], r.an[p].best);
+    return `${who} played ${reviewNum(p)} ${next}${m.sym}, ${m.name}: it cost ${Math.round(m.loss)}% of the winning chances. Better was ${reviewNum(p)} ${better}${yours ? ' (the arrow)' : ''}.${progress}`;
   }
   if (!r.an[p] || !r.an[p + 1]) return `Next: ${reviewNum(p)} ${next}${progress}`;
-  return `Next: ${reviewNum(p)} ${next}${r.an[p].best && sanOfUci(r.sts[p], r.an[p].best) === next ? ', the best move' : ', a sound move'}.${progress}`;
+  const isBest = r.an[p].best && sanOfUci(r.sts[p], r.an[p].best) === next;
+  return `Next: ${reviewNum(p)} ${next}${isBest ? ', the best move' : ', a sound move'}${yours ? (isBest ? ' (the arrow)' : `; the best was ${sanOfUci(r.sts[p], r.an[p].best)} (the arrow)`) : ''}.${progress}`;
 }
 // one move forward: in the past only the picture moves; at the end of what was replayed, the robots play it
 function reviewStep(g) {

@@ -456,6 +456,10 @@ function readTokens() {
 }
 function resize() {
   const wUnits = W + 2 * GAP + 2 * PAD, hUnits = 8 + 2 * PAD;
+  // never taller than the window, so the move buttons right under the board stay on screen
+  const top = cv.getBoundingClientRect().top + window.scrollY;
+  const room = Math.max(360, window.innerHeight - top - 64);
+  cv.style.maxWidth = (room / hUnits * wUnits) + 'px';
   const cssW = cv.clientWidth || 800, dpr = Math.min(2, window.devicePixelRatio || 1);
   S = cssW / wUnits;
   cv.width = Math.round(cssW * dpr); cv.height = Math.round(hUnits * S * dpr);
@@ -621,7 +625,10 @@ let game = null, flip = false;
 const loose = new Array(agents.length).fill(null);
 const sqToCell = sq => (sq >> 3) * W + TRAY_W + (sq & 7);
 const sqX = sq => vx(TRAY_W + (sq & 7) + 0.5), sqY = sq => (sq >> 3) + 0.5;
-function endGame() { if (game && game.bot && game.bot.brain) game.bot.brain.stop(); if (game && game.eng) game.eng.brain.stop(); $('material').hidden = true; $('gHint').hidden = $('gSolution').hidden = true; game = null; glide = null; trayHand = null; $('gPromo').hidden = true; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
+function endGame() {
+  // the move buttons sit under the board, outside the game panel
+  $('gNav').hidden = true;
+  if (game && game.bot && game.bot.brain) game.bot.brain.stop(); if (game && game.eng) game.eng.brain.stop(); $('material').hidden = true; $('gHint').hidden = $('gSolution').hidden = true; game = null; glide = null; trayHand = null; $('gPromo').hidden = true; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
 function startGame(pz) {
   const m2 = pz.set === 'm2';
   game = { pz, st: startSt(pz), m2, history: [], sel: -1, last: null, phase: 'user', userMoves: 0, hint: -1, hintTo: -1, result: '', view: null };

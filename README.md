@@ -111,7 +111,7 @@ No packages are needed, only Python 3.8+ (or nothing at all, see below).
 
 ## Review a game
 
-Under Play Stockfish, paste a game from Lichess or chess.com, or open its .pgn file, and press Review with the robots. Your name there tells which side you were (or choose it). The robots replay the game: ▶ or → plays the next move, Play goes on by itself, ← and the move list look back. Meanwhile Stockfish at full strength reads every position, and each move gets the mark Lichess would give it, from the winning chances it cost: ?! at 10%, ? at 20%, ?? at 30%. Play stops before every marked move, with the better move drawn as an arrow, so you can think about the position first. At the end, a count of blunders, mistakes and inaccuracies for each side.
+Under Play Stockfish, paste a game from Lichess or chess.com, or open its .pgn file, and press Review with the robots. Your name there tells which side you were (or choose it). The robots replay the game: ▶ or → plays the next move, Play goes on by itself, ← and the move list look back. Meanwhile Stockfish at full strength reads every position, and each move gets the mark Lichess would give it, from the winning chances it cost: ?! at 10%, ? at 20%, ?? at 30%. Play stops before every marked move. On your own turns an arrow shows the best move, so you can think about the position first; the opponent's better moves are given in words only. The move buttons sit right under the board, which never grows taller than the window, so they stay on screen. At the end, a count of blunders, mistakes and inaccuracies for each side.
 
 ## Openings
 
