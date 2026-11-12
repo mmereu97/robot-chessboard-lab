@@ -113,6 +113,10 @@ No packages are needed, only Python 3.8+ (or nothing at all, see below).
 
 Under Play Stockfish, paste a game from Lichess or chess.com, or open its .pgn file, and press Review with the robots. Your name there tells which side you were (or choose it). The robots replay the game: ▶ or → plays the next move, Play goes on by itself, ← and the move list look back. Meanwhile Stockfish at full strength reads every position, and each move gets the mark Lichess would give it, from the winning chances it cost: ?! at 10%, ? at 20%, ?? at 30%. Play stops before every marked move. On your own turns an arrow shows the best move, so you can think about the position first; the opponent's better moves are given in words only. The move buttons sit right under the board, which never grows taller than the window, so they stay on screen. At the end, a count of blunders, mistakes and inaccuracies for each side.
 
+### How well each side played
+
+At the end of a game against the bot, or of a reviewed game, Stockfish reads the whole game and a panel gives each side's accuracy, computed as Lichess does (its formula is public), and the Elo at which the bot plays that accurately. That scale was measured on the bot itself: 60 games of the bot against itself at ten levels from 200 to 2400, every position read by Stockfish at full strength (`tools/perf-elo`, results in `results.jsonl`). The medians rise from 55% at 200 to 92% at 2400. One game spreads about ±6 points around them, which on this scale is several hundred Elo, so a single game is shown as a range ("about 1100, likely 700–1500"). The page keeps your last ten games in the browser and shows their average; once there are three, "Play the bot at …" offers that average, so the bot can be set to the level you actually play at. Accuracy stops telling levels apart above about 2000.
+
 ## Openings
 
 The third tab is a game against Stockfish that teaches openings as you play. Choose your colour and Stockfish's Elo and press New game. Beside the board, the list holds every opening of [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) (CC0, 3,865 named lines in 141 families) that your game can still turn into, and it shrinks with every move. A line stays in the list while every move played so far, by each side, is one of its moves, in any order: after 1.d4 d5 2.Bf4 e6 the London System is still offered, though its lines play Nf3 before Bf4. Openings that go on in the move order played come first; those reached by another order follow under their own heading. Lines named after a White system elsewhere ("Queen's Pawn Game: London System") are grouped with that system: London, Colle, Torre. Above the list, the opening the game has reached so far, with its ECO code.
@@ -136,7 +140,7 @@ A named opening depends on both players' moves; a system is a setup of your own 
 | `static/js/chess.js` | Chess rules: legal moves, check, mate-in-two solver, robot defence |
 | `static/js/app.js` | Drawing, animation, buttons, playing moves |
 | `static/js/openings.js` | The Openings tab: the openings still possible, the line you follow, its ghosts |
-| `static/js/review.js` | Review a game: reading a PGN, the replay, Stockfish's marks and the stops before mistakes |
+| `static/js/review.js` | Review a game: reading a PGN, the replay, Stockfish's marks and the stops before mistakes; accuracy and the Elo it matches on the bot's scale |
 | `static/js/systems.js` | Systems: the eleven setups, their ghosts, the advice checked by Stockfish, the notes |
 | `static/data/openings.json` | The named openings: ECO code, name, moves |
 | `static/bot/` | The Stockfish bot: its brain and driver (`bot.js`), the engine, chess.js, the openings database |

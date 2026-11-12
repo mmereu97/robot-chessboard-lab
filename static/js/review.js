@@ -132,3 +132,120 @@ $('gReviewPlay').addEventListener('click', () => {
   if (g.review.auto) { if (g.view !== null) viewPly(g, g.history.length); reviewStep(g); }
   refreshGame();
 });
+// --- accuracy as Lichess computes it (lila, AccuracyPercent): each move scores by the winning chances it lost,
+// and the game's accuracy is the mean of a volatility-weighted mean and a harmonic mean of those scores.
+// wins: White's winning chances (0–100) of every position, from the start to the end.
+function gameAccuracy(wins) {
+  const n = wins.length - 1; if (n < 2) return null;
+  const win = Math.min(8, Math.max(2, Math.floor(n / 10)));
+  // as lila: the first window repeats for the opening moves, then it slides one position at a time
+  const windows = [];
+  for (let i = 0; i < n; i++) { const st = Math.max(0, i - (win - 2)); windows.push(wins.slice(st, st + win)); }
+  const sd = a => { const m = a.reduce((x, y) => x + y, 0) / a.length; return Math.sqrt(a.reduce((x, y) => x + (y - m) * (y - m), 0) / a.length); };
+  const weights = windows.map(w => Math.min(12, Math.max(0.5, sd(w))));
+  const out = {};
+  for (const side of ['w', 'b']) {
+    const acc = [], wt = [];
+    for (let i = 0; i < n; i++) {
+      if ((i % 2 === 0) !== (side === 'w')) continue;
+      const before = side === 'w' ? wins[i] : 100 - wins[i], after = side === 'w' ? wins[i + 1] : 100 - wins[i + 1];
+      const loss = Math.max(0, before - after);
+      acc.push(Math.min(100, Math.max(0, 103.1668 * Math.exp(-0.04354 * loss) - 3.1669 + 1)));
+      wt.push(weights[i]);
+    }
+    if (!acc.length) { out[side] = null; continue; }
+    const weighted = acc.reduce((s, a, k) => s + a * wt[k], 0) / wt.reduce((s, w) => s + w, 0);
+    const harmonic = acc.length / acc.reduce((s, a) => s + 1 / Math.max(a, 1), 0);
+    out[side] = (weighted + harmonic) / 2;
+  }
+  return out;
+}
+// =================== how well each side played, on the bot's own Elo scale ===================
+// The bot played itself at known Elos and Stockfish read every game (tools/perf-elo); this table turns a game's
+// accuracy into the Elo at which the bot plays that accurately, so "you played like 1100" means: set the bot to 1100.
+// 60 games, 12 accuracies per level (tools/perf-elo, 12.11.2026): the medians, with 1000 and 1200 pooled at 1100
+// because their order came out reversed. One game spreads about ±6 points around these, so a single game is a range.
+const PERF_CAL = [[54.6, 200], [72.6, 400], [73.3, 600], [80.3, 800], [83.3, 1100], [85.1, 1400], [87.9, 1700], [91.2, 2000], [91.8, 2400]];
+const PERF_SPREAD = 6;
+const PERF_KEEP = 10;   // your last games, kept in the browser for an average
+let perfHist = [];
+try { perfHist = JSON.parse(localStorage.getItem('robo-perf') || '[]'); } catch (e) {}
+function eloFromAccuracy(acc) {
+  if (!PERF_CAL || acc == null) return null;
+  if (acc <= PERF_CAL[0][0]) return PERF_CAL[0][1];
+  for (let i = 1; i < PERF_CAL.length; i++) {
+    const [a0, e0] = PERF_CAL[i - 1], [a1, e1] = PERF_CAL[i];
+    if (acc <= a1) return Math.round((e0 + (e1 - e0) * (acc - a0) / (a1 - a0)) / 50) * 50;
+  }
+  return PERF_CAL[PERF_CAL.length - 1][1];
+}
+// a finished game against the bot is read the same way as a reviewed one: Stockfish at full strength, position by position
+function readGame(g, sts) {
+  const token = g.perf = { sts, cps: [], done: false };
+  const step = i => {
+    if (game !== g || g.perf !== token) return;
+    if (i >= sts.length) { token.done = true; refreshGame(); return; }
+    const st = sts[i], over = CH.status(st);
+    const keep = cp => { token.cps[i] = cp; if (i % 4 === 3) refreshGame(); step(i + 1); };
+    if (over === 'mate') { keep(st.white ? -100000 : 100000); return; }
+    if (over === 'stalemate') { keep(0); return; }
+    judge(fenOf(st), 350).then(sc => keep((st.white ? 1 : -1) * (sc.mate !== undefined ? (sc.mate > 0 ? 100000 : -100000) : sc.cp)));
+  };
+  step(0);
+}
+function perfLine(acc, who) {
+  if (acc == null) return '';
+  const elo = eloFromAccuracy(acc), lo = eloFromAccuracy(acc - PERF_SPREAD), hi = eloFromAccuracy(acc + PERF_SPREAD);
+  const top = PERF_CAL[PERF_CAL.length - 1][1], show = e => e >= top ? top + '+' : e;   // the scale ends at the strongest level measured
+  return `<div class="perf-row"><span>${esc(who)}</span><b>${Math.round(acc)}%</b><span>played like about <b>${show(elo)}</b>${lo < hi ? ` <small>(likely ${lo}–${show(hi)})</small>` : ''}</span></div>`;
+}
+// your accuracy, kept once per game; the average of the last ones is what the button offers
+function keepMine(g, acc) {
+  if (g.perfKept || acc == null) return; g.perfKept = true;
+  perfHist.push(Math.round(acc * 10) / 10); perfHist = perfHist.slice(-PERF_KEEP);
+  try { localStorage.setItem('robo-perf', JSON.stringify(perfHist)); } catch (e) {}
+}
+function averageLine() {
+  if (perfHist.length < 2) return '';
+  const avg = perfHist.reduce((a, b) => a + b, 0) / perfHist.length;
+  return `<div class="perf-row avg"><span>Your last ${perfHist.length} games</span><b>${Math.round(avg)}%</b><span>about <b>${eloFromAccuracy(avg)}</b> on average</span></div>`;
+}
+let perfElo = null;
+// the level to play next: your average once there are 3 games, otherwise this game
+const levelToOffer = acc => eloFromAccuracy(perfHist.length >= 3 ? perfHist.reduce((a, b) => a + b, 0) / perfHist.length : acc);
+function perfRefresh(g) {
+  const box = $('gPerf'); let html = '';
+  if (g.review) {
+    const r = g.review;
+    if (r.done && viewedPly(g) >= r.moves.length) {
+      const acc = gameAccuracy(r.an.map(a => winPct(a.cp))), me = r.me, op = me === 'w' ? 'b' : 'w';
+      keepMine(g, acc[me]);
+      html = perfLine(acc[me], 'You') + perfLine(acc[op], r.names[op].replace(/ \(\d+\)$/, '')) + averageLine();
+      perfElo = levelToOffer(acc[me]);
+    }
+  } else if (g.bot && g.phase === 'done' && g.history.length >= 6) {
+    if (!g.perf) { let st = startSt(g.pz); const sts = [st]; for (const m of g.moves) { st = CH.make(st, m); sts.push(st); } readGame(g, sts); }
+    const P = g.perf;
+    if (!P.done) html = `<div class="perf-wait">Stockfish is reading the game: ${P.cps.length} of ${P.sts.length} positions…</div>`;
+    else {
+      const acc = gameAccuracy(P.cps.map(winPct)), me = g.bot.human, op = me === 'w' ? 'b' : 'w';
+      keepMine(g, acc[me]);
+      html = perfLine(acc[me], 'You') + perfLine(acc[op], `Stockfish at ${g.bot.elo}`) + averageLine();
+      perfElo = levelToOffer(acc[me]);
+    }
+  } else if (g.bot && g.phase !== 'done') g.perf = null;   // taken back: read again at the next end
+  box.hidden = !html;
+  if (html) {
+    const btn = perfElo ? `<button class="btn" id="gPlayLevel" type="button">Play the bot at ${perfElo}</button>` : '';
+    const sig = html + btn;
+    if (box.dataset.sig !== sig) {
+      box.dataset.sig = sig;
+      box.innerHTML = `<div class="perf-head"><span class="lbl">Your play</span><span class="perf-note">accuracy as Lichess computes it · Elo on this bot's scale, measured on 60 of its own games · one game is only a rough guide; the average of several says more</span></div>${html}${btn}`;
+    }
+  }
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#gPlayLevel') || !perfElo) return;
+  $('botElo').value = perfElo; saveElo(perfElo);
+  if (mode !== 'play') goMode('play'); else request('bot');
+});

@@ -626,6 +626,7 @@ const loose = new Array(agents.length).fill(null);
 const sqToCell = sq => (sq >> 3) * W + TRAY_W + (sq & 7);
 const sqX = sq => vx(TRAY_W + (sq & 7) + 0.5), sqY = sq => (sq >> 3) + 0.5;
 function endGame() {
+  $('gPerf').hidden = true;
   // the move buttons sit under the board, outside the game panel
   $('gNav').hidden = true;
   if (game && game.bot && game.bot.brain) game.bot.brain.stop(); if (game && game.eng) game.eng.brain.stop(); $('material').hidden = true; $('gHint').hidden = $('gSolution').hidden = true; game = null; glide = null; trayHand = null; $('gPromo').hidden = true; $('game').hidden = true; cv.classList.remove('clickable', 'holding'); }
@@ -1221,6 +1222,7 @@ function refreshGame() {
   if (g.bestNote && g.bestNote.ply === g.history.length && g.phase === 'user' && g.view === null && !g.result) text = g.bestNote.text;   // stays until you move
   $('gStatus').textContent = text; $('gStatus').className = 'game-status ' + cls;
   if (mode === 'openings') exploreRefresh();
+  perfRefresh(g);
   cv.classList.toggle('holding', !!(g.held && g.held.queued === null));
   $('gPromo').hidden = !g.asking;
   const move = (h, i) => g.bot || g.review ? `<span class="mv${i + 1 === viewedPly(g) ? ' on' : ''}" data-ply="${i + 1}">${h}${g.review ? reviewBadge(g, i) : ''}</span>` : h;

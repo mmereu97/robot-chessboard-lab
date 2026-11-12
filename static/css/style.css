@@ -222,3 +222,13 @@ canvas.cheer-canvas { position: fixed; inset: 0; display: block; width: 100vw; h
 .game-nav.near .btn.play { flex: 1.4 1 0; font-family: var(--f-body); font-weight: 600; background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .game-nav.near .btn.play[hidden] { display: none; }
 .game-nav.near .btn.play:disabled { background: var(--panel); color: var(--muted); border-color: var(--line); }
+.perf { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-left: 3px solid var(--good); border-radius: 8px; background: var(--bg); }
+.perf[hidden] { display: none; }
+.perf-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.perf-note { font-size: 12px; color: var(--muted); }
+.perf-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.4fr); gap: 12px; align-items: baseline; font-size: 14px; }
+.perf-row > b { font: 600 16px var(--f-mono); font-variant-numeric: tabular-nums; }
+.perf-wait { font-size: 13px; color: var(--muted); }
+.perf .btn { justify-self: start; }
+.perf-row small { color: var(--muted); font-size: 12px; }
+.perf-row.avg { padding-top: 6px; border-top: 1px solid var(--line); }
